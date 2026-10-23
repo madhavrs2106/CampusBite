@@ -526,7 +526,7 @@ function App() {
                           </button>
                         </div>
                         <div className="food-info">
-                          <div>
+                          <div className="food-info-text">
                             <div className="food-title-row">
                               <FssaiVegSymbol />
                               <h3>{i.name}</h3>
@@ -631,7 +631,7 @@ function App() {
                           </button>
                         </div>
                         <div className="food-info">
-                          <div>
+                          <div className="food-info-text">
                             <div className="food-title-row">
                               <FssaiVegSymbol />
                               <h3>{i.name}</h3>

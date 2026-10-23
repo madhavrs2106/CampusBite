@@ -138,7 +138,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
               <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-color, #1e293b)', marginBottom: '8px' }}>
                 I am a
               </label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+              <div className="role-selector-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                 <button
                   type="button"
                   onClick={() => setUserType('student')}
