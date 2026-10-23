@@ -228,24 +228,29 @@ async def delete_profile(
     except Exception:
         pass
 
+    deleted_from_auth = False
+    auth_warning = None
+
     # 2. Supabase Admin API with service_role key (if configured)
     import os
     service_role_key = (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
     if service_role_key and config.url and not access_token.startswith("demo-"):
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(3.0)) as client:
-                await client.delete(
+                resp = await client.delete(
                     f"{config.url}/auth/v1/admin/users/{user_id}",
                     headers={
                         "apikey": service_role_key,
                         "Authorization": f"Bearer {service_role_key}",
                     },
                 )
+                if resp.status_code < 300:
+                    deleted_from_auth = True
         except Exception:
             pass
 
     # 3. Supabase REST API (call delete_user_self RPC with user's access token)
-    if not access_token.startswith("demo-") and config.url:
+    if not deleted_from_auth and not access_token.startswith("demo-") and config.url:
         try:
             headers = {
                 "apikey": config.anon_key,
@@ -257,7 +262,9 @@ async def delete_profile(
                     f"{config.url}/rest/v1/rpc/delete_user_self",
                     headers=headers,
                 )
-                if rpc_resp.status_code >= 400:
+                if rpc_resp.status_code < 300:
+                    deleted_from_auth = True
+                else:
                     await client.post(
                         f"{config.url}/rest/v1/rpc/delete_user_profile",
                         headers=headers,
@@ -269,10 +276,18 @@ async def delete_profile(
         except Exception:
             pass
 
+    if not deleted_from_auth:
+        auth_warning = (
+            "Profile was deleted from database, but user credentials could not be removed from auth.users. "
+            "To remove from Supabase Auth, add SUPABASE_SERVICE_ROLE_KEY or install delete_user_self function."
+        )
+
     return {
         "status": "ok",
         "message": "Profile and associated data deleted successfully.",
         "user_id": str(user_id),
+        "deleted_from_auth": deleted_from_auth,
+        "auth_warning": auth_warning,
     }
 
 

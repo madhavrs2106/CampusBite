@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Check, ChevronRight, CircleAlert, Clock3, LoaderCircle, Plus, RefreshCw, RotateCcw, Utensils } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { AlertTriangle, Check, ChevronRight, CircleAlert, Clock3, LoaderCircle, Plus, RefreshCw, RotateCcw, Trash2, Utensils } from 'lucide-react'
 
 import { supabase, useAuth } from './auth'
 import { FssaiVegSymbol } from './App'
@@ -62,6 +62,7 @@ async function api(path: string, token: string, init: RequestInit = {}) {
 
 export default function StaffDashboard() {
   const auth = useAuth()
+  const navigate = useNavigate()
   const [tab, setTab] = useState<'orders' | 'menu'>('orders')
   const [orders, setOrders] = useState<Order[]>([])
   const [menu, setMenu] = useState<MenuItem[]>([])
@@ -72,6 +73,35 @@ export default function StaffDashboard() {
   const [success, setSuccess] = useState('')
   const [declining, setDeclining] = useState('')
   const [declineReason, setDeclineReason] = useState('')
+  const [showDeleteStaffModal, setShowDeleteStaffModal] = useState(false)
+  const [deletingStaff, setDeletingStaff] = useState(false)
+  const [deleteStaffError, setDeleteStaffError] = useState('')
+
+  const confirmDeleteStaff = async () => {
+    setDeletingStaff(true)
+    setDeleteStaffError('')
+    try {
+      const { authDeleted } = await auth.deleteProfile()
+      setShowDeleteStaffModal(false)
+      if (!authDeleted) {
+        navigate('/register', {
+          replace: true,
+          state: {
+            warning:
+              'Canteen staff profile removed from app database. Note: Your email is still registered in Supabase Auth because the delete_user_self migration has not been run in the Supabase SQL Editor. Please run the SQL migration or remove the user from Supabase Dashboard → Authentication → Users to re-register with this email.',
+          },
+        })
+      } else {
+        navigate('/register', {
+          replace: true,
+          state: { notice: 'Your Canteen Staff profile and account have been permanently deleted.' },
+        })
+      }
+    } catch (err) {
+      setDeleteStaffError(err instanceof Error ? err.message : 'Could not delete staff profile.')
+      setDeletingStaff(false)
+    }
+  }
 
   const token = auth.session?.access_token || 'demo-staff-token'
 
@@ -354,6 +384,26 @@ export default function StaffDashboard() {
             <RotateCcw size={14} />
             Reset Trial Data
           </button>
+          <button
+            className="staff-refresh"
+            style={{
+              fontSize: '12px',
+              padding: '6px 10px',
+              color: '#b91c1c',
+              borderColor: '#fca5a5',
+              background: '#fef2f2',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              cursor: 'pointer',
+              fontWeight: 600,
+            }}
+            onClick={() => setShowDeleteStaffModal(true)}
+            title="Delete Canteen User Profile"
+          >
+            <Trash2 size={14} />
+            Delete Profile
+          </button>
         </div>
       </div>
 
@@ -617,6 +667,169 @@ export default function StaffDashboard() {
             </div>
           )}
         </section>
+      )}
+
+      <section
+        style={{
+          marginTop: '32px',
+          padding: '20px 24px',
+          background: '#ffffff',
+          borderRadius: '16px',
+          border: '1px solid #fee2e2',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '16px',
+        }}
+      >
+        <div>
+          <span className="eyebrow" style={{ color: '#b91c1c' }}>CANTEEN ACCOUNT · DANGER ZONE</span>
+          <h3 style={{ margin: '4px 0 2px', fontSize: '16px', color: '#0f172a' }}>
+            Delete Canteen User Profile
+          </h3>
+          <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
+            Logged in as <strong>{auth.profile?.full_name || 'Staff User'}</strong> ({auth.user?.email || 'canteen staff'}).
+            Permanently delete your profile, role permissions, and canteen records.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowDeleteStaffModal(true)}
+          style={{
+            padding: '9px 18px',
+            borderRadius: '8px',
+            background: '#fef2f2',
+            color: '#dc2626',
+            border: '1px solid #fecaca',
+            fontWeight: 600,
+            fontSize: '13px',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
+          <Trash2 size={15} />
+          <span>Delete Profile</span>
+        </button>
+      </section>
+
+      {showDeleteStaffModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            zIndex: 9999,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              padding: '24px',
+              maxWidth: '460px',
+              width: '100%',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.08)',
+              border: '1px solid #fee2e2',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '12px',
+                  backgroundColor: '#fee2e2',
+                  color: '#dc2626',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <AlertTriangle size={24} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px', color: '#0f172a', fontWeight: 700 }}>
+                  Are you sure you want to delete?
+                </h3>
+                <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#dc2626', fontWeight: 600 }}>
+                  Permanent Canteen Profile Deletion
+                </p>
+              </div>
+            </div>
+
+            {deleteStaffError && (
+              <p className="inline-alert" style={{ marginBottom: '14px' }}>
+                {deleteStaffError}
+              </p>
+            )}
+
+            <p style={{ fontSize: '14px', color: '#475569', lineHeight: '1.5', margin: '0 0 12px' }}>
+              Are you sure you want to delete the Canteen Staff profile for{' '}
+              <strong>{auth.profile?.full_name || auth.user?.email || 'this canteen user'}</strong>?
+            </p>
+
+            <ul style={{ fontSize: '13px', color: '#64748b', margin: '0 0 18px', paddingLeft: '18px', lineHeight: '1.6' }}>
+              <li>Your canteen staff session will be terminated immediately</li>
+              <li>Kitchen dashboard management permissions will be permanently revoked</li>
+              <li>Your account record ({auth.user?.email || 'current user'}) will be removed</li>
+            </ul>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteStaffModal(false)
+                  setDeleteStaffError('')
+                }}
+                disabled={deletingStaff}
+                style={{
+                  padding: '9px 16px',
+                  borderRadius: '8px',
+                  background: '#f1f5f9',
+                  color: '#334155',
+                  border: '1px solid #cbd5e1',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDeleteStaff()}
+                disabled={deletingStaff}
+                style={{
+                  padding: '9px 18px',
+                  borderRadius: '8px',
+                  background: '#dc2626',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: deletingStaff ? 'not-allowed' : 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <Trash2 size={15} />
+                <span>{deletingStaff ? 'Deleting…' : 'Yes, Delete Canteen Profile'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   )

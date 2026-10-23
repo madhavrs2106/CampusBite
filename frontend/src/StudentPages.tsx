@@ -65,7 +65,8 @@ export function AuthPage({ register = false }: { register?: boolean }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState((location.state as { notice?: string } | null)?.notice || '')
+  const [notice, setNotice] = useState((location.state as { notice?: string; warning?: string } | null)?.notice || '')
+  const [warning, setWarning] = useState((location.state as { notice?: string; warning?: string } | null)?.warning || '')
   const [busy, setBusy] = useState(false)
   const [userType, setUserType] = useState<'student' | 'faculty' | 'canteen_staff'>('student')
 
@@ -75,6 +76,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
     e.preventDefault()
     setError('')
     setNotice('')
+    setWarning('')
     setBusy(true)
     const f = new FormData(e.currentTarget)
     try {
@@ -100,6 +102,8 @@ export function AuthPage({ register = false }: { register?: boolean }) {
       const msg = e instanceof Error ? e.message : 'Could not complete request.'
       if (msg.toLowerCase().includes('email not confirmed')) {
         setError('Email not confirmed yet. In Supabase Dashboard → Authentication → Users, click on your user and choose "Confirm email", or turn off "Confirm email" under Authentication → Providers → Email.')
+      } else if (msg.toLowerCase().includes('user already registered')) {
+        setError('User already registered. If you previously deleted this profile, Supabase isolates credentials in auth.users. To register again with this email, please delete the user row from Supabase Dashboard → Authentication → Users or run the delete_user_self migration in SQL Editor.')
       } else {
         setError(msg)
       }
@@ -121,6 +125,11 @@ export function AuthPage({ register = false }: { register?: boolean }) {
         </p>
       )}
       {error && <p className="inline-alert">{error}</p>}
+      {warning && (
+        <p className="inline-alert" style={{ background: '#fffbeb', borderColor: '#fde68a', color: '#92400e' }}>
+          <strong>Note:</strong> {warning}
+        </p>
+      )}
       {notice && <p className="inline-success">{notice}</p>}
       <form className="student-form" onSubmit={submit}>
         {register && (
@@ -323,18 +332,25 @@ export function ProfilePage() {
   }
 
   const confirmAndDelete = async () => {
-    if (!window.confirm('Are you sure you want to delete your profile? All account details, orders, and role access will be permanently removed.')) {
-      return
-    }
     setDeleting(true)
     setSaveError('')
     try {
-      await a.deleteProfile()
+      const { authDeleted } = await a.deleteProfile()
       setShowDeleteModal(false)
-      navigate('/register', {
-        replace: true,
-        state: { notice: 'Your profile and account have been deleted successfully.' },
-      })
+      if (!authDeleted) {
+        navigate('/register', {
+          replace: true,
+          state: {
+            warning:
+              'Profile removed from app database. Note: Your email is still registered in Supabase Auth because the delete_user_self migration has not been run in the Supabase SQL Editor. Please run the SQL migration or remove the user from Supabase Dashboard → Authentication → Users to re-register with this email.',
+          },
+        })
+      } else {
+        navigate('/register', {
+          replace: true,
+          state: { notice: 'Your profile and account have been deleted successfully.' },
+        })
+      }
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Could not delete profile.')
       setDeleting(false)
@@ -346,7 +362,9 @@ export function ProfilePage() {
     <main className="student-page">
       <section className="student-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div className="eyebrow">CAMPUSBITE · STUDENT PROFILE</div>
+          <div className="eyebrow">
+            CAMPUSBITE · {a.profile?.role === 'canteen_staff' ? 'CANTEEN PROFILE' : a.profile?.role === 'faculty' ? 'FACULTY PROFILE' : 'STUDENT PROFILE'}
+          </div>
           {!isEditing && (
             <button
               onClick={() => {
@@ -469,6 +487,16 @@ export function ProfilePage() {
             <Edit3 size={15} />
             <span>{isEditing ? 'Close Edit' : 'Edit Profile'}</span>
           </button>
+          {a.profile?.role === 'canteen_staff' && (
+            <Link
+              to="/staff"
+              className="profile-action-btn"
+              style={{ background: '#fff7ed', color: '#c2410c', borderColor: '#fed7aa', fontWeight: 600 }}
+            >
+              <Utensils size={15} />
+              <span>Kitchen Dashboard</span>
+            </Link>
+          )}
           <Link to="/orders" className="profile-action-btn secondary">
             <ShoppingBag size={16} />
             <span>View My Orders</span>

@@ -33,7 +33,7 @@ type AuthValue = {
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
   updateProfile: (fullName: string, studentId: string) => Promise<void>
-  deleteProfile: () => Promise<void>
+  deleteProfile: () => Promise<{ authDeleted: boolean; authErrorMsg: string }>
   setRole: (role: 'student' | 'faculty' | 'canteen_staff' | 'admin') => Promise<void>
 }
 
@@ -244,24 +244,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       },
       deleteProfile: async () => {
+        let authDeleted = false
+        let authErrorMsg = ''
+
         // 1. Call delete_user_self RPC directly via Supabase client (deletes from auth.users)
         if (supabase) {
           try {
-            await supabase.rpc('delete_user_self')
-          } catch {
-            // RPC might not be migrated yet
+            const { error: rpcErr } = await supabase.rpc('delete_user_self')
+            if (!rpcErr) {
+              authDeleted = true
+            } else {
+              authErrorMsg = rpcErr.message
+            }
+          } catch (e) {
+            authErrorMsg = e instanceof Error ? e.message : 'RPC failed'
           }
         }
 
         const token = session?.access_token || 'demo-staff-token'
         if (token) {
           try {
-            await fetch(`${apiUrl}/api/me/profile`, {
+            const res = await fetch(`${apiUrl}/api/me/profile`, {
               method: 'DELETE',
               headers: {
                 Authorization: `Bearer ${token}`,
               },
             })
+            const data = await res.json().catch(() => null)
+            if (data?.deleted_from_auth) {
+              authDeleted = true
+            } else if (data?.auth_warning && !authErrorMsg) {
+              authErrorMsg = data.auth_warning
+            }
           } catch {
             // Ignore offline backend
           }
@@ -281,6 +295,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(null)
         setSession(null)
         setProfileError('')
+        return { authDeleted, authErrorMsg }
       },
     }),
     [session, profile, profileError, loading]
