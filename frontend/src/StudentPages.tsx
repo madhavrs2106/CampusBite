@@ -480,16 +480,6 @@ export function ProfilePage() {
             <Edit3 size={15} />
             <span>{isEditing ? 'Close Edit' : 'Edit Profile'}</span>
           </button>
-          {a.profile?.role === 'canteen_staff' && (
-            <Link
-              to="/staff"
-              className="profile-action-btn"
-              style={{ background: '#fff7ed', color: '#c2410c', borderColor: '#fed7aa', fontWeight: 600 }}
-            >
-              <Utensils size={15} />
-              <span>Kitchen Dashboard</span>
-            </Link>
-          )}
           <Link to="/orders" className="profile-action-btn secondary">
             <ShoppingBag size={16} />
             <span>View My Orders</span>

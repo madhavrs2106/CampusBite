@@ -135,6 +135,14 @@ function App() {
   const update = (id: string | number, d: number) =>
     setCart(c => ({ ...c, [String(id)]: Math.max(0, (c[String(id)] ?? 0) + d) }))
 
+  const isStudentOrFaculty =
+    Boolean(auth.user) &&
+    (auth.profile?.role === 'student' ||
+      auth.profile?.role === 'faculty' ||
+      Boolean(auth.profile?.student_id && auth.profile?.role !== 'canteen_staff' && auth.profile?.role !== 'admin'))
+
+  const showKitchen = !isStudentOrFaculty && (auth.profile?.role === 'canteen_staff' || auth.profile?.role === 'admin' || !auth.user)
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -168,9 +176,11 @@ function App() {
           <Link className={location.pathname === '/profile' ? 'nav-active' : ''} to="/profile">
             Profile
           </Link>
-          <Link className={location.pathname === '/staff' ? 'nav-active' : ''} to="/staff">
-            Kitchen
-          </Link>
+          {showKitchen && (
+            <Link className={location.pathname === '/staff' ? 'nav-active' : ''} to="/staff">
+              Kitchen
+            </Link>
+          )}
           {auth.profile?.role === 'admin' && (
 
             <Link className={location.pathname === '/admin' ? 'nav-active' : ''} to="/admin">
@@ -282,14 +292,16 @@ function App() {
                 <User size={18} />
                 <span>Profile</span>
               </Link>
-              <Link
-                className={location.pathname === '/staff' ? 'mobile-nav-link active' : 'mobile-nav-link'}
-                to="/staff"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <Coffee size={18} />
-                <span>Canteen Kitchen</span>
-              </Link>
+              {showKitchen && (
+                <Link
+                  className={location.pathname === '/staff' ? 'mobile-nav-link active' : 'mobile-nav-link'}
+                  to="/staff"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Coffee size={18} />
+                  <span>Canteen Kitchen</span>
+                </Link>
+              )}
               {auth.profile?.role === 'admin' && (
 
                 <Link

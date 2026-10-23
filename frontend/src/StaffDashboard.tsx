@@ -204,41 +204,27 @@ export default function StaffDashboard() {
     )
   }
 
-  // If logged in as student, offer 1-click switch to staff mode
+  // If logged in as student or faculty, deny kitchen access
   if (auth.profile && !['canteen_staff', 'admin'].includes(auth.profile.role)) {
     return (
       <main className="student-page">
         <section className="student-card">
-          <div className="eyebrow">CAMPUSBITE · CANTEEN KITCHEN</div>
-          <h1>Canteen Kitchen Access</h1>
+          <div className="eyebrow">CAMPUSBITE · ACCESS RESTRICTED</div>
+          <h1>Kitchen Access Restricted</h1>
           <p className="student-intro">
-            You are signed in as <strong>{auth.profile.full_name || auth.user?.email}</strong> with role{' '}
-            <span className="status-pill status-placed">{auth.profile.role}</span>.
+            You are signed in as <strong>{auth.profile.full_name || auth.user?.email}</strong> (
+            <span className="status-pill status-placed">{auth.profile.role === 'faculty' ? 'Faculty' : 'Student'}</span>).
           </p>
 
-          <div style={{ margin: '22px 0', padding: '18px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '12px' }}>
-            <h3 style={{ margin: '0 0 8px', color: '#ea580c', fontSize: '16px' }}>⚡ Enable Canteen Staff Mode</h3>
-            <p style={{ margin: '0 0 16px', fontSize: '14px', color: '#7c2d12', lineHeight: '1.5' }}>
-              Switch your account to <strong>Canteen Staff</strong> to manage active orders, move preparation states (Accepted, Preparing, Ready, Collected), and toggle food item availability.
+          <div style={{ margin: '22px 0', padding: '18px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+            <h3 style={{ margin: '0 0 8px', color: '#334155', fontSize: '16px' }}>Canteen Staff Only</h3>
+            <p style={{ margin: '0 0 16px', fontSize: '14px', color: '#64748b', lineHeight: '1.5' }}>
+              The Kitchen Dashboard is reserved for authorized canteen personnel. Student and Faculty accounts do not have access to kitchen management.
             </p>
-            <button
-              className="primary-button"
-              onClick={async () => {
-                await auth.setRole('canteen_staff')
-                void load()
-              }}
-            >
-              Activate Canteen Staff Mode
-            </button>
+            <Link to="/menu" className="primary-button" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              Back to Menu
+            </Link>
           </div>
-
-          <details style={{ fontSize: '13px', color: '#64748b', marginTop: '14px' }}>
-            <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Hosted Supabase Setup (Permanent SQL Grant)</summary>
-            <p style={{ margin: '8px 0 4px' }}>Run this in Supabase SQL Editor:</p>
-            <pre style={{ background: '#0f172a', color: '#f8fafc', padding: '12px', borderRadius: '8px', overflowX: 'auto', fontSize: '12px' }}>
-              {`update public.profiles set role = 'canteen_staff' where id = '${auth.user?.id}';`}
-            </pre>
-          </details>
         </section>
       </main>
     )
