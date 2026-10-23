@@ -46,6 +46,7 @@ async def post_order(
         items=[line.model_dump(mode="json") for line in body.items],
         payment_method=body.payment_method,
         client_request_id=body.client_request_id,
+        user_id=user.user_id,
     )
 
 

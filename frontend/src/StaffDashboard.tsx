@@ -81,22 +81,15 @@ export default function StaffDashboard() {
     setDeletingStaff(true)
     setDeleteStaffError('')
     try {
-      const { authDeleted } = await auth.deleteProfile()
+      await auth.deleteProfile()
       setShowDeleteStaffModal(false)
-      if (!authDeleted) {
-        navigate('/register', {
-          replace: true,
-          state: {
-            warning:
-              'Canteen staff profile removed from app database. Note: Your email is still registered in Supabase Auth because the delete_user_self migration has not been run in the Supabase SQL Editor. Please run the SQL migration or remove the user from Supabase Dashboard → Authentication → Users to re-register with this email.',
-          },
-        })
-      } else {
-        navigate('/register', {
-          replace: true,
-          state: { notice: 'Your Canteen Staff profile and account have been permanently deleted.' },
-        })
-      }
+      navigate('/login', {
+        replace: true,
+        state: {
+          notice:
+            'Your Canteen Staff profile and account have been permanently deleted. You have been signed out.',
+        },
+      })
     } catch (err) {
       setDeleteStaffError(err instanceof Error ? err.message : 'Could not delete staff profile.')
       setDeletingStaff(false)

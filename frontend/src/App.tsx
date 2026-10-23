@@ -110,6 +110,12 @@ function App() {
     localStorage.setItem('campusbite-cart', JSON.stringify(cart))
   }, [cart])
 
+  useEffect(() => {
+    const onResetCart = () => setCart({})
+    window.addEventListener('campusbite:cart-reset', onResetCart)
+    return () => window.removeEventListener('campusbite:cart-reset', onResetCart)
+  }, [])
+
   const categories = ['All', ...Array.from(new Set(items.map(item => item.category)))]
   const shown = useMemo(
     () =>

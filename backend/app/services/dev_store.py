@@ -228,9 +228,21 @@ def add_dev_menu_item(payload: dict[str, Any]) -> dict[str, Any]:
 def get_dev_orders(user_id: UUID | None = None) -> list[dict[str, Any]]:
     if user_id is None:
         return [dict(o) for o in DEV_ORDERS]
-    # For a specific user, return orders matching user_id or all dev orders
+    # For a specific user, return only orders matching user_id
     matching = [o for o in DEV_ORDERS if o.get("user_id") == str(user_id)]
-    return [dict(o) for o in (matching or DEV_ORDERS)]
+    return [dict(o) for o in matching]
+
+
+def delete_dev_user_orders(user_id: UUID | str) -> int:
+    uid_str = str(user_id)
+    matching = [o for o in DEV_ORDERS if o.get("user_id") == uid_str]
+    count = len(matching)
+    for o in matching:
+        try:
+            DEV_ORDERS.remove(o)
+        except ValueError:
+            pass
+    return count
 
 
 def get_dev_order_by_id(order_id: str) -> dict[str, Any] | None:

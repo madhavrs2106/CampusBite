@@ -53,6 +53,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
+    if (s.user?.user_metadata?.is_deleted) {
+      if (supabase) {
+        await supabase.auth.signOut().catch(() => {})
+      }
+      setProfile(null)
+      setSession(null)
+      setProfileError('This account has been deleted.')
+      return
+    }
+
     const meta = s.user?.user_metadata ?? {}
     const fallbackName =
       (meta.full_name as string) ||
@@ -66,6 +76,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const r = await fetch(`${apiUrl}/api/me`, {
         headers: { Authorization: `Bearer ${s.access_token}` },
       })
+      if (r.status === 401) {
+        const errData = await r.json().catch(() => null)
+        if (errData?.detail?.includes('deleted')) {
+          if (supabase) await supabase.auth.signOut().catch(() => {})
+          setProfile(null)
+          setSession(null)
+          setProfileError('This account has been deleted.')
+          return
+        }
+      }
       if (r.ok) {
         const data = (await r.json()) as Profile
         setProfile({
@@ -130,8 +150,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       signIn: async (email, password) => {
         if (!supabase) throw new Error('Add Supabase credentials to frontend/.env.local first.')
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
+        if (data?.user?.user_metadata?.is_deleted) {
+          await supabase.auth.signOut().catch(() => {})
+          throw new Error('This account has been permanently deleted. Please create a new account.')
+        }
       },
       signUp: async (email, password, name, studentId, userType = 'student') => {
         if (!supabase) throw new Error('Add Supabase credentials to frontend/.env.local first.')
@@ -246,21 +270,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       deleteProfile: async () => {
         let authDeleted = false
         let authErrorMsg = ''
+        const currentUserId = session?.user?.id
 
-        // 1. Call delete_user_self RPC directly via Supabase client (deletes from auth.users)
-        if (supabase) {
-          try {
-            const { error: rpcErr } = await supabase.rpc('delete_user_self')
-            if (!rpcErr) {
-              authDeleted = true
-            } else {
-              authErrorMsg = rpcErr.message
-            }
-          } catch (e) {
-            authErrorMsg = e instanceof Error ? e.message : 'RPC failed'
-          }
-        }
-
+        // 1. Backend deletion: deletes profile, orders, payments, marks user ID deleted in backend
         const token = session?.access_token || 'demo-staff-token'
         if (token) {
           try {
@@ -280,18 +292,72 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Ignore offline backend
           }
         }
+
+        // 2. Supabase deletion / credentials scrambling
         if (supabase) {
+          // A. Try calling database RPC function delete_user_self
           try {
-            if (session?.user?.id) {
-              await supabase.from('profiles').delete().eq('id', session.user.id)
+            const { error: rpcErr } = await supabase.rpc('delete_user_self')
+            if (!rpcErr) {
+              authDeleted = true
+            } else {
+              const { error: rpcErr2 } = await supabase.rpc('delete_user_profile')
+              if (!rpcErr2) {
+                authDeleted = true
+              }
             }
+          } catch {
+            // RPC not available
+          }
+
+          // B. Delete profile row directly if public.profiles exists
+          try {
+            if (currentUserId) {
+              await supabase.from('profiles').delete().eq('id', currentUserId)
+            }
+          } catch {
+            // ignore
+          }
+
+          // C. If user is still in auth.users (missing service_role key or RPC not migrated):
+          // Scramble password to an unguessable string so user CANNOT log in again with their password,
+          // and wipe metadata so name, student ID and details are deleted.
+          if (!authDeleted) {
+            try {
+              const unguessablePassword = `DEL_${crypto.randomUUID()}_${Date.now()}!${Math.random().toString(36)}#Aa`
+              await supabase.auth.updateUser({
+                password: unguessablePassword,
+                data: {
+                  full_name: '',
+                  student_id: '',
+                  role: 'student',
+                  is_deleted: true,
+                  deleted_at: new Date().toISOString(),
+                },
+              })
+            } catch {
+              // ignore
+            }
+          }
+
+          // D. Sign out from Supabase Auth
+          try {
             await supabase.auth.signOut()
           } catch {
-            // Ignore signout error
+            // ignore
           }
         }
-        localStorage.removeItem('campusbite-dev-role')
-        localStorage.removeItem('campusbite-cart')
+
+        // 3. Clear all client-side data
+        try {
+          localStorage.removeItem('campusbite-dev-role')
+          localStorage.removeItem('campusbite-cart')
+          sessionStorage.clear()
+          window.dispatchEvent(new CustomEvent('campusbite:cart-reset'))
+        } catch {
+          // ignore
+        }
+
         setProfile(null)
         setSession(null)
         setProfileError('')

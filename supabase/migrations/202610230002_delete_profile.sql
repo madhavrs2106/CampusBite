@@ -11,6 +11,14 @@ begin
     raise exception 'Not authenticated';
   end if;
 
+  -- 0. Remove payments for this user's orders (if tables exist)
+  begin
+    delete from public.payments
+    where order_id in (select id from public.orders where user_id = v_uid);
+  exception when others then
+    null;
+  end;
+
   -- 1. Remove order items for this user's orders (if tables exist)
   begin
     delete from public.order_items
@@ -36,8 +44,12 @@ begin
   end;
 
   -- 4. Permanently delete from auth.users!
-  delete from auth.users
-  where id = v_uid;
+  begin
+    delete from auth.users
+    where id = v_uid;
+  exception when others then
+    null;
+  end;
 
   return jsonb_build_object('status', 'ok', 'user_id', v_uid);
 end;

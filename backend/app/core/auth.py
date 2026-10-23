@@ -166,7 +166,14 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
 
-    from app.services.profiles import fetch_profile
+    from app.services.profiles import fetch_profile, is_user_deleted
+
+    if is_user_deleted(user_id) or claims.get("user_metadata", {}).get("is_deleted") is True:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This account has been deleted.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     profile = await fetch_profile(config, credentials.credentials, user_id)
     if profile.account_status != "active":

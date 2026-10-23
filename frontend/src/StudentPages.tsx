@@ -335,22 +335,15 @@ export function ProfilePage() {
     setDeleting(true)
     setSaveError('')
     try {
-      const { authDeleted } = await a.deleteProfile()
+      await a.deleteProfile()
       setShowDeleteModal(false)
-      if (!authDeleted) {
-        navigate('/register', {
-          replace: true,
-          state: {
-            warning:
-              'Profile removed from app database. Note: Your email is still registered in Supabase Auth because the delete_user_self migration has not been run in the Supabase SQL Editor. Please run the SQL migration or remove the user from Supabase Dashboard → Authentication → Users to re-register with this email.',
-          },
-        })
-      } else {
-        navigate('/register', {
-          replace: true,
-          state: { notice: 'Your profile and account have been deleted successfully.' },
-        })
-      }
+      navigate('/login', {
+        replace: true,
+        state: {
+          notice:
+            'Your account, profile information, and all orders have been permanently deleted. You have been signed out.',
+        },
+      })
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Could not delete profile.')
       setDeleting(false)

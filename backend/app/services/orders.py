@@ -92,6 +92,7 @@ async def create_order(
     items: list[dict[str, Any]],
     payment_method: str,
     client_request_id: UUID,
+    user_id: UUID | None = None,
 ) -> dict[str, Any]:
     try:
         response = await _request(
@@ -105,7 +106,7 @@ async def create_order(
             },
         )
         if response.status_code == 404:
-            return create_dev_order(items, payment_method)
+            return create_dev_order(items, payment_method, user_id=user_id)
         if response.status_code >= 400:
             _raise_order_error(response)
         record = response.json()
@@ -113,7 +114,7 @@ async def create_order(
             raise ValueError("Expected an order object")
         return _normalise_order(record)
     except (HTTPException, ValueError, TypeError):
-        return create_dev_order(items, payment_method)
+        return create_dev_order(items, payment_method, user_id=user_id)
 
 
 async def list_orders(

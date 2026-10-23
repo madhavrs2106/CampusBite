@@ -261,6 +261,37 @@ class AccessTokenTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
 
+    def test_delete_profile_removes_user_data_and_blocks_further_access(self) -> None:
+        from app.services.dev_store import create_dev_order, get_dev_orders, DEV_ORDERS
+        from app.services.profiles import delete_profile, fetch_profile, is_user_deleted, reset_dev_profiles
+
+        reset_dev_profiles()
+        test_uid = UUID("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+
+        # 1. Create order for test user
+        order = create_dev_order(
+            [{"menu_item_id": "10000000-0000-0000-0000-000000000001", "quantity": 2}],
+            "online",
+            user_id=test_uid,
+        )
+        self.assertEqual(len(get_dev_orders(test_uid)), 1)
+
+        # 2. Delete profile
+        config = SupabaseConfig(TEST_URL, "test-anon-key")
+        result = asyncio.run(delete_profile(config, "test-token", test_uid))
+        self.assertEqual(result["status"], "ok")
+        self.assertTrue(is_user_deleted(test_uid))
+
+        # 3. Orders for deleted user must be completely gone (empty list, not all orders)
+        user_orders = get_dev_orders(test_uid)
+        self.assertEqual(user_orders, [])
+
+        # 4. Accessing profile for deleted user must be rejected with 401
+        with self.assertRaises(HTTPException) as ctx:
+            asyncio.run(fetch_profile(config, "test-token", test_uid))
+        self.assertEqual(ctx.exception.status_code, 401)
+        self.assertIn("deleted", ctx.exception.detail.lower())
+
 
 if __name__ == "__main__":
     unittest.main()
