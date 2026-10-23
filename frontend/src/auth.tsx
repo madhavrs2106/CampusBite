@@ -244,6 +244,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       },
       deleteProfile: async () => {
+        // 1. Call delete_user_self RPC directly via Supabase client (deletes from auth.users)
+        if (supabase) {
+          try {
+            await supabase.rpc('delete_user_self')
+          } catch {
+            // RPC might not be migrated yet
+          }
+        }
+
         const token = session?.access_token || 'demo-staff-token'
         if (token) {
           try {

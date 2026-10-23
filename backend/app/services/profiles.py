@@ -228,7 +228,23 @@ async def delete_profile(
     except Exception:
         pass
 
-    # 2. Supabase REST API (if active and not demo token)
+    # 2. Supabase Admin API with service_role key (if configured)
+    import os
+    service_role_key = (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+    if service_role_key and config.url and not access_token.startswith("demo-"):
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(3.0)) as client:
+                await client.delete(
+                    f"{config.url}/auth/v1/admin/users/{user_id}",
+                    headers={
+                        "apikey": service_role_key,
+                        "Authorization": f"Bearer {service_role_key}",
+                    },
+                )
+        except Exception:
+            pass
+
+    # 3. Supabase REST API (call delete_user_self RPC with user's access token)
     if not access_token.startswith("demo-") and config.url:
         try:
             headers = {
@@ -236,14 +252,16 @@ async def delete_profile(
                 "Authorization": f"Bearer {access_token}",
                 "Accept": "application/json",
             }
-            async with httpx.AsyncClient(timeout=httpx.Timeout(2.0)) as client:
-                # First attempt RPC delete_user_profile
+            async with httpx.AsyncClient(timeout=2.0) as client:
                 rpc_resp = await client.post(
-                    f"{config.url}/rest/v1/rpc/delete_user_profile",
+                    f"{config.url}/rest/v1/rpc/delete_user_self",
                     headers=headers,
                 )
                 if rpc_resp.status_code >= 400:
-                    # Direct delete fallback
+                    await client.post(
+                        f"{config.url}/rest/v1/rpc/delete_user_profile",
+                        headers=headers,
+                    )
                     await client.delete(
                         f"{config.url}/rest/v1/profiles?id=eq.{user_id}",
                         headers=headers,

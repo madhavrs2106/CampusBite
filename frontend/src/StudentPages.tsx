@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowRight, ChevronRight, Edit3, LogOut, RefreshCw, ShoppingBag, Trash2, User, Utensils } from 'lucide-react'
+import { AlertTriangle, ArrowRight, ChevronRight, Edit3, LogOut, RefreshCw, ShoppingBag, Trash2, User, Utensils } from 'lucide-react'
 import { supabase, useAuth } from './auth'
 import { FssaiVegSymbol, MenuItem } from './App'
 
@@ -271,7 +271,7 @@ export function ProfilePage() {
   const [saveSuccess, setSaveSuccess] = useState('')
   const [saveError, setSaveError] = useState('')
   const [deleting, setDeleting] = useState(false)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   useEffect(() => {
     if (a.profile) {
@@ -322,19 +322,23 @@ export function ProfilePage() {
     }
   }
 
-  const handleDeleteProfile = async () => {
+  const confirmAndDelete = async () => {
+    if (!window.confirm('Are you sure you want to delete your profile? All account details, orders, and role access will be permanently removed.')) {
+      return
+    }
     setDeleting(true)
     setSaveError('')
     try {
       await a.deleteProfile()
+      setShowDeleteModal(false)
       navigate('/register', {
         replace: true,
-        state: { notice: 'Your profile and account have been deleted.' },
+        state: { notice: 'Your profile and account have been deleted successfully.' },
       })
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Could not delete profile.')
       setDeleting(false)
-      setShowDeleteConfirm(false)
+      setShowDeleteModal(false)
     }
   }
 
@@ -511,74 +515,131 @@ export function ProfilePage() {
                 Permanently delete your profile data, role access, and account records.
               </p>
             </div>
-            {!showDeleteConfirm ? (
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirm(true)}
-                className="profile-action-btn"
-                style={{
-                  background: '#fef2f2',
-                  color: '#dc2626',
-                  border: '1px solid #fecaca',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                }}
-              >
-                <Trash2 size={15} />
-                <span>Delete Profile</span>
-              </button>
-            ) : (
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '13px', color: '#dc2626', fontWeight: 600 }}>
-                  Confirm deletion?
-                </span>
-                <button
-                  type="button"
-                  onClick={handleDeleteProfile}
-                  disabled={deleting}
+            <button
+              type="button"
+              onClick={() => setShowDeleteModal(true)}
+              className="profile-action-btn"
+              style={{
+                background: '#fef2f2',
+                color: '#dc2626',
+                border: '1px solid #fecaca',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 600,
+                fontSize: '13px',
+              }}
+            >
+              <Trash2 size={15} />
+              <span>Delete Profile</span>
+            </button>
+          </div>
+        </div>
+
+        {showDeleteModal && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(15, 23, 42, 0.65)',
+              backdropFilter: 'blur(4px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '16px',
+              zIndex: 9999,
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '16px',
+                padding: '24px',
+                maxWidth: '440px',
+                width: '100%',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.08)',
+                border: '1px solid #fee2e2',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                <div
                   style={{
-                    background: '#dc2626',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: '8px 14px',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    cursor: deleting ? 'not-allowed' : 'pointer',
-                    display: 'inline-flex',
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '12px',
+                    backgroundColor: '#fee2e2',
+                    color: '#dc2626',
+                    display: 'flex',
                     alignItems: 'center',
-                    gap: '6px',
+                    justifyContent: 'center',
+                    flexShrink: 0,
                   }}
                 >
-                  <Trash2 size={14} />
-                  <span>{deleting ? 'Deleting…' : 'Yes, Delete'}</span>
-                </button>
+                  <AlertTriangle size={24} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '18px', color: '#0f172a', fontWeight: 700 }}>
+                    Are you sure you want to delete?
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#dc2626', fontWeight: 600 }}>
+                    This action is permanent and cannot be undone.
+                  </p>
+                </div>
+              </div>
+
+              <p style={{ fontSize: '14px', color: '#475569', lineHeight: '1.5', margin: '0 0 16px' }}>
+                Permanently delete all profile details for <strong>{a.profile?.full_name || a.user.email}</strong>. Your profile information, active cart, and order records will be permanently removed.
+              </p>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
                 <button
                   type="button"
-                  onClick={() => setShowDeleteConfirm(false)}
+                  onClick={() => setShowDeleteModal(false)}
                   disabled={deleting}
                   style={{
-                    background: '#f1f5f9',
-                    color: '#475569',
-                    border: 'none',
+                    padding: '9px 16px',
                     borderRadius: '8px',
-                    padding: '8px 12px',
+                    background: '#f1f5f9',
+                    color: '#334155',
+                    border: '1px solid #cbd5e1',
+                    fontWeight: 600,
                     fontSize: '13px',
                     cursor: 'pointer',
                   }}
                 >
                   Cancel
                 </button>
+                <button
+                  type="button"
+                  onClick={() => void confirmAndDelete()}
+                  disabled={deleting}
+                  style={{
+                    padding: '9px 18px',
+                    borderRadius: '8px',
+                    background: '#dc2626',
+                    color: '#ffffff',
+                    border: 'none',
+                    fontWeight: 600,
+                    fontSize: '13px',
+                    cursor: deleting ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <Trash2 size={15} />
+                  <span>{deleting ? 'Deleting…' : 'Yes, Delete Profile'}</span>
+                </button>
               </div>
-            )}
+            </div>
           </div>
-        </div>
+        )}
       </section>
     </main>
+
 
   )
 }
