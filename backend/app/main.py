@@ -34,15 +34,17 @@ default_dev_origins = [
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://campus-bite-delta.vercel.app",
 ]
 allowed_origins = list(dict.fromkeys(configured_origins + default_dev_origins))
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"^https:\/\/.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["*"],
 )
 app.include_router(menu_router, prefix="/api")
 app.include_router(profile_router, prefix="/api")
