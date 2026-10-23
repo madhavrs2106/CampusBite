@@ -83,3 +83,14 @@ async def update_my_role(
         return await update_profile(config, user.access_token, user.user_id, {"role": body.role})
     except HTTPException:
         return set_dev_profile_role(user.user_id, body.role)
+
+
+@router.delete("/me/profile", status_code=status.HTTP_200_OK)
+@router.delete("/me", status_code=status.HTTP_200_OK)
+async def delete_my_profile(
+    user: Annotated[AuthContext, Depends(get_current_user)],
+    config: Annotated[SupabaseConfig, Depends(get_supabase_config)],
+) -> dict:
+    from app.services.profiles import delete_profile
+    return await delete_profile(config, user.access_token, user.user_id)
+

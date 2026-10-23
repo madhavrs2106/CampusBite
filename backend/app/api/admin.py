@@ -138,6 +138,16 @@ async def update_account(
     return result
 
 
+@router.delete("/accounts/{user_id}")
+async def delete_account(
+    user_id: UUID,
+    user: AdminUser,
+    config: Annotated[SupabaseConfig, Depends(get_supabase_config)],
+) -> dict[str, Any]:
+    from app.services.profiles import delete_profile
+    return await delete_profile(config, user.access_token, user_id)
+
+
 @router.get("/categories")
 async def admin_categories(
     user: AdminUser,

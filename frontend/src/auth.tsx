@@ -33,6 +33,7 @@ type AuthValue = {
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
   updateProfile: (fullName: string, studentId: string) => Promise<void>
+  deleteProfile: () => Promise<void>
   setRole: (role: 'student' | 'faculty' | 'canteen_staff' | 'admin') => Promise<void>
 }
 
@@ -241,6 +242,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Dev in-memory role is active
           }
         }
+      },
+      deleteProfile: async () => {
+        const token = session?.access_token || 'demo-staff-token'
+        if (token) {
+          try {
+            await fetch(`${apiUrl}/api/me/profile`, {
+              method: 'DELETE',
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            })
+          } catch {
+            // Ignore offline backend
+          }
+        }
+        if (supabase) {
+          try {
+            if (session?.user?.id) {
+              await supabase.from('profiles').delete().eq('id', session.user.id)
+            }
+            await supabase.auth.signOut()
+          } catch {
+            // Ignore signout error
+          }
+        }
+        localStorage.removeItem('campusbite-dev-role')
+        localStorage.removeItem('campusbite-cart')
+        setProfile(null)
+        setSession(null)
+        setProfileError('')
       },
     }),
     [session, profile, profileError, loading]

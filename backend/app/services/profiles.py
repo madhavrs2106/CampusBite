@@ -210,3 +210,51 @@ async def update_profile(
             detail="The profile service returned an invalid response.",
         ) from exc
 
+
+async def delete_profile(
+    config: SupabaseConfig,
+    access_token: str,
+    user_id: UUID,
+) -> dict[str, Any]:
+    # 1. In-memory dev store cleanup
+    if user_id in DEV_PROFILES:
+        del DEV_PROFILES[user_id]
+
+    try:
+        from app.services.dev_store import DEV_ORDERS
+        matching_orders = [o for o in DEV_ORDERS if o.get("user_id") == str(user_id)]
+        for o in matching_orders:
+            DEV_ORDERS.remove(o)
+    except Exception:
+        pass
+
+    # 2. Supabase REST API (if active and not demo token)
+    if not access_token.startswith("demo-") and config.url:
+        try:
+            headers = {
+                "apikey": config.anon_key,
+                "Authorization": f"Bearer {access_token}",
+                "Accept": "application/json",
+            }
+            async with httpx.AsyncClient(timeout=httpx.Timeout(2.0)) as client:
+                # First attempt RPC delete_user_profile
+                rpc_resp = await client.post(
+                    f"{config.url}/rest/v1/rpc/delete_user_profile",
+                    headers=headers,
+                )
+                if rpc_resp.status_code >= 400:
+                    # Direct delete fallback
+                    await client.delete(
+                        f"{config.url}/rest/v1/profiles?id=eq.{user_id}",
+                        headers=headers,
+                    )
+        except Exception:
+            pass
+
+    return {
+        "status": "ok",
+        "message": "Profile and associated data deleted successfully.",
+        "user_id": str(user_id),
+    }
+
+

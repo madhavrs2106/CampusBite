@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowRight, ChevronRight, Edit3, LogOut, RefreshCw, ShoppingBag, User, Utensils } from 'lucide-react'
+import { ArrowRight, ChevronRight, Edit3, LogOut, RefreshCw, ShoppingBag, Trash2, User, Utensils } from 'lucide-react'
 import { supabase, useAuth } from './auth'
 import { FssaiVegSymbol, MenuItem } from './App'
 
@@ -65,7 +65,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
+  const [notice, setNotice] = useState((location.state as { notice?: string } | null)?.notice || '')
   const [busy, setBusy] = useState(false)
   const [userType, setUserType] = useState<'student' | 'faculty' | 'canteen_staff'>('student')
 
@@ -263,12 +263,15 @@ export function AuthPage({ register = false }: { register?: boolean }) {
 
 export function ProfilePage() {
   const a = useAuth()
+  const navigate = useNavigate()
   const [isEditing, setIsEditing] = useState(false)
   const [name, setName] = useState('')
   const [studentId, setStudentId] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState('')
   const [saveError, setSaveError] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   useEffect(() => {
     if (a.profile) {
@@ -316,6 +319,22 @@ export function ProfilePage() {
       setSaveError(err instanceof Error ? err.message : 'Could not save profile.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDeleteProfile = async () => {
+    setDeleting(true)
+    setSaveError('')
+    try {
+      await a.deleteProfile()
+      navigate('/register', {
+        replace: true,
+        state: { notice: 'Your profile and account have been deleted.' },
+      })
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not delete profile.')
+      setDeleting(false)
+      setShowDeleteConfirm(false)
     }
   }
 
@@ -471,8 +490,96 @@ export function ProfilePage() {
             <span>Sign out</span>
           </button>
         </div>
+
+        <div
+          className="profile-danger-zone"
+          style={{
+            marginTop: '32px',
+            paddingTop: '20px',
+            borderTop: '1px solid #fee2e2',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '15px', color: '#b91c1c', fontWeight: 600 }}>
+                Delete Profile
+              </h3>
+              <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#64748b' }}>
+                Permanently delete your profile data, role access, and account records.
+              </p>
+            </div>
+            {!showDeleteConfirm ? (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="profile-action-btn"
+                style={{
+                  background: '#fef2f2',
+                  color: '#dc2626',
+                  border: '1px solid #fecaca',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                }}
+              >
+                <Trash2 size={15} />
+                <span>Delete Profile</span>
+              </button>
+            ) : (
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '13px', color: '#dc2626', fontWeight: 600 }}>
+                  Confirm deletion?
+                </span>
+                <button
+                  type="button"
+                  onClick={handleDeleteProfile}
+                  disabled={deleting}
+                  style={{
+                    background: '#dc2626',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '8px 14px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: deleting ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <Trash2 size={14} />
+                  <span>{deleting ? 'Deleting…' : 'Yes, Delete'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={deleting}
+                  style={{
+                    background: '#f1f5f9',
+                    color: '#475569',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '8px 12px',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </section>
     </main>
+
   )
 }
 
