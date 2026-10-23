@@ -954,12 +954,8 @@ begin
   end;
 
   -- 4. Permanently delete from auth.users!
-  begin
-    delete from auth.users
-    where id = v_uid;
-  exception when others then
-    null;
-  end;
+  delete from auth.users
+  where id = v_uid;
 
   return jsonb_build_object('status', 'ok', 'user_id', v_uid);
 end;
