@@ -68,7 +68,8 @@ async def patch_my_profile(
 
 class RoleUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    role: str = Field(pattern="^(student|canteen_staff|admin)$")
+    role: str = Field(pattern="^(student|faculty|canteen_staff|admin)$")
+
 
 
 @router.post("/me/role", response_model=ProfileRecord)

@@ -37,7 +37,7 @@ class TransitionRequest(BaseModel):
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def post_order(
     body: CreateOrderRequest,
-    user: Annotated[AuthContext, Depends(require_roles("student"))],
+    user: Annotated[AuthContext, Depends(require_roles("student", "faculty", "canteen_staff"))],
     config: Annotated[SupabaseConfig, Depends(get_supabase_config)],
 ) -> dict:
     return await create_order(
@@ -54,7 +54,7 @@ async def get_orders(
     user: Annotated[AuthContext, Depends(get_current_user)],
     config: Annotated[SupabaseConfig, Depends(get_supabase_config)],
 ) -> list[dict]:
-    if user.role == "student":
+    if user.role in {"student", "faculty"}:
         owner_id = user.user_id
     elif user.role in {"canteen_staff", "admin"}:
         owner_id = None
@@ -81,14 +81,15 @@ async def post_order_transition(
     user: Annotated[AuthContext, Depends(get_current_user)],
     config: Annotated[SupabaseConfig, Depends(get_supabase_config)],
 ) -> dict:
-    if body.next_status == "cancelled" and user.role != "student":
+    if body.next_status == "cancelled" and user.role not in {"student", "faculty"}:
         from fastapi import HTTPException
 
-        raise HTTPException(status_code=403, detail="Only students can request order cancellation.")
+        raise HTTPException(status_code=403, detail="Only students and faculty can request order cancellation.")
     if body.next_status != "cancelled" and user.role not in {"canteen_staff", "admin"}:
         from fastapi import HTTPException
 
         raise HTTPException(status_code=403, detail="Staff access is required for this status change.")
+
     return await transition_order(
         config,
         user.access_token,

@@ -67,6 +67,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
+  const [userType, setUserType] = useState<'student' | 'faculty' | 'canteen_staff'>('student')
 
   if (auth.user) return <Navigate to="/profile" replace />
 
@@ -82,12 +83,13 @@ export function AuthPage({ register = false }: { register?: boolean }) {
           String(f.get('email')),
           String(f.get('password')),
           String(f.get('name')),
-          String(f.get('student_id'))
+          String(f.get('student_id')),
+          userType
         )
         if (confirmation) {
           setNotice('Account created! Please check your email to confirm your address, then sign in.')
         } else {
-          navigate('/profile')
+          navigate(userType === 'canteen_staff' ? '/staff' : '/profile')
         }
       } else {
         await auth.signIn(String(f.get('email')), String(f.get('password')))
@@ -110,7 +112,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
     <Card title={register ? 'Create your account' : 'Welcome back'}>
       <p className="student-intro">
         {register
-          ? 'Use your campus details to get started with fast ordering.'
+          ? 'Select your campus role and enter your details to get started.'
           : 'Sign in to manage your campus orders.'}
       </p>
       {!auth.configured && (
@@ -123,19 +125,117 @@ export function AuthPage({ register = false }: { register?: boolean }) {
       <form className="student-form" onSubmit={submit}>
         {register && (
           <>
+            <div style={{ margin: '4px 0 16px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-color, #1e293b)', marginBottom: '8px' }}>
+                I am a
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setUserType('student')}
+                  style={{
+                    padding: '10px 6px',
+                    borderRadius: '10px',
+                    border: userType === 'student' ? '2px solid #ea580c' : '1px solid #cbd5e1',
+                    background: userType === 'student' ? '#fff7ed' : '#ffffff',
+                    color: userType === 'student' ? '#c2410c' : '#475569',
+                    fontWeight: userType === 'student' ? 700 : 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '13px',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <span style={{ fontSize: '20px' }}>🎓</span>
+                  <span>Student</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUserType('faculty')}
+                  style={{
+                    padding: '10px 6px',
+                    borderRadius: '10px',
+                    border: userType === 'faculty' ? '2px solid #ea580c' : '1px solid #cbd5e1',
+                    background: userType === 'faculty' ? '#fff7ed' : '#ffffff',
+                    color: userType === 'faculty' ? '#c2410c' : '#475569',
+                    fontWeight: userType === 'faculty' ? 700 : 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '13px',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <span style={{ fontSize: '20px' }}>👨‍🏫</span>
+                  <span>Faculty</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUserType('canteen_staff')}
+                  style={{
+                    padding: '10px 6px',
+                    borderRadius: '10px',
+                    border: userType === 'canteen_staff' ? '2px solid #ea580c' : '1px solid #cbd5e1',
+                    background: userType === 'canteen_staff' ? '#fff7ed' : '#ffffff',
+                    color: userType === 'canteen_staff' ? '#c2410c' : '#475569',
+                    fontWeight: userType === 'canteen_staff' ? 700 : 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '13px',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <span style={{ fontSize: '20px' }}>🧑‍🍳</span>
+                  <span>Staff</span>
+                </button>
+              </div>
+            </div>
+
             <label>
               Full name
-              <input name="name" required autoComplete="name" placeholder="e.g. Madhav Sharma" />
+              <input
+                name="name"
+                required
+                autoComplete="name"
+                placeholder={userType === 'faculty' ? 'e.g. Dr. Ramesh Kumar' : userType === 'canteen_staff' ? 'e.g. Suresh Kumar' : 'e.g. Madhav Sharma'}
+              />
             </label>
             <label>
-              Student ID / Roll No.
-              <input name="student_id" required autoComplete="off" placeholder="e.g. 2026CS101" />
+              {userType === 'faculty'
+                ? 'Faculty ID / Employee Code'
+                : userType === 'canteen_staff'
+                ? 'Staff / Employee ID'
+                : 'Student ID / Roll No.'}
+              <input
+                name="student_id"
+                required
+                autoComplete="off"
+                placeholder={
+                  userType === 'faculty' ? 'e.g. FAC-4091' : userType === 'canteen_staff' ? 'e.g. STF-102' : 'e.g. 2026CS101'
+                }
+              />
             </label>
           </>
         )}
         <label>
           Campus email
-          <input name="email" type="email" required autoComplete="email" placeholder="student@college.edu" />
+          <input
+            name="email"
+            type="email"
+            required
+            autoComplete="email"
+            placeholder={
+              userType === 'faculty' ? 'faculty@college.edu' : userType === 'canteen_staff' ? 'staff@college.edu' : 'student@college.edu'
+            }
+          />
         </label>
         <label>
           Password
@@ -153,6 +253,7 @@ export function AuthPage({ register = false }: { register?: boolean }) {
         </button>
       </form>
       <p className="student-switch">
+
         {register ? 'Already registered?' : 'New to CampusBite?'}{' '}
         <Link to={register ? '/login' : '/register'}>{register ? 'Sign in' : 'Create an account'}</Link>
       </p>
@@ -265,10 +366,12 @@ export function ProfilePage() {
               {a.user.email}
             </p>
             <span className="profile-student-id">
-              Roll No: {a.profile?.student_id || 'Not registered'}
+              {a.profile?.role === 'faculty' ? 'Faculty ID' : a.profile?.role === 'canteen_staff' ? 'Staff ID' : 'Roll No'}: {a.profile?.student_id || 'Not registered'}
             </span>
           </div>
-          <span className="profile-role-pill">{a.profile?.role || 'student'}</span>
+          <span className="profile-role-pill" style={{ textTransform: 'capitalize' }}>
+            {a.profile?.role === 'canteen_staff' ? 'Canteen Staff' : a.profile?.role === 'faculty' ? 'Faculty' : 'Student'}
+          </span>
         </div>
 
         {saveSuccess && <p className="inline-success">{saveSuccess}</p>}
@@ -287,13 +390,18 @@ export function ProfilePage() {
               />
             </label>
             <label>
-              Student ID / Roll No.
+              {a.profile?.role === 'faculty'
+                ? 'Faculty ID / Employee Code'
+                : a.profile?.role === 'canteen_staff'
+                ? 'Staff / Employee ID'
+                : 'Student ID / Roll No.'}
               <input
                 value={studentId}
                 onChange={e => setStudentId(e.target.value)}
-                placeholder="e.g. 2026CS101"
+                placeholder="ID Number"
               />
             </label>
+
             <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
               <button type="submit" className="primary-button" disabled={saving}>
                 {saving ? 'Saving…' : 'Save Changes'}

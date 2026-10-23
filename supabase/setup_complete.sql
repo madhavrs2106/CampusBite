@@ -5,7 +5,8 @@ create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text not null default '' check (char_length(full_name) <= 120),
   student_id text check (student_id is null or char_length(student_id) <= 50),
-  role text not null default 'student' check (role in ('student','canteen_staff','admin')),
+  role text not null default 'student' check (role in ('student','faculty','canteen_staff','admin')),
+
   account_status text not null default 'active' check (account_status in ('active','pending','suspended')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -121,7 +122,7 @@ create trigger orders_set_updated_at before update on public.orders for each row
 create trigger payments_set_updated_at before update on public.payments for each row execute function public.set_updated_at();
 create trigger canteen_settings_set_updated_at before update on public.canteen_settings for each row execute function public.set_updated_at();
 
--- A signup can only create a student profile. Privileged roles are assigned by a protected admin workflow.
+-- A signup creates a student, faculty or canteen_staff profile based on signup metadata.
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
@@ -130,12 +131,17 @@ begin
     new.id,
     coalesce(new.raw_user_meta_data ->> 'full_name', ''),
     nullif(new.raw_user_meta_data ->> 'student_id', ''),
-    'student',
+    case
+      when coalesce(new.raw_user_meta_data ->> 'role', new.raw_user_meta_data ->> 'user_type') in ('student', 'faculty', 'canteen_staff')
+        then coalesce(new.raw_user_meta_data ->> 'role', new.raw_user_meta_data ->> 'user_type')
+      else 'student'
+    end,
     'active'
   );
   return new;
 end;
 $$;
+
 create trigger on_auth_user_created after insert on auth.users for each row execute function public.handle_new_user();
 revoke all on function public.handle_new_user() from public;
 
@@ -305,9 +311,10 @@ declare
   v_lines jsonb := '[]'::jsonb;
 begin
   if v_user_id is null then raise exception 'Authentication required' using errcode = '42501'; end if;
-  if not exists (select 1 from public.profiles p where p.id = v_user_id and p.role = 'student' and p.account_status = 'active') then
-    raise exception 'Active student account required' using errcode = '42501';
+  if not exists (select 1 from public.profiles p where p.id = v_user_id and p.role in ('student', 'faculty', 'canteen_staff') and p.account_status = 'active') then
+    raise exception 'Active student, faculty, or staff account required' using errcode = '42501';
   end if;
+
   if p_client_request_id is null then raise exception 'Request id is required' using errcode = '22023'; end if;
   if p_payment_method is null or p_payment_method not in ('online', 'pay_at_pickup') then raise exception 'Invalid payment method' using errcode = '22023'; end if;
 
@@ -766,9 +773,10 @@ declare
   v_lines jsonb := '[]'::jsonb;
 begin
   if v_user_id is null then raise exception 'Authentication required' using errcode = '42501'; end if;
-  if not exists (select 1 from public.profiles p where p.id = v_user_id and p.role = 'student' and p.account_status = 'active') then
-    raise exception 'Active student account required' using errcode = '42501';
+  if not exists (select 1 from public.profiles p where p.id = v_user_id and p.role in ('student', 'faculty', 'canteen_staff') and p.account_status = 'active') then
+    raise exception 'Active student, faculty, or staff account required' using errcode = '42501';
   end if;
+
   if p_client_request_id is null then raise exception 'Request id is required' using errcode = '22023'; end if;
   if p_payment_method is null or p_payment_method not in ('online', 'pay_at_pickup') then raise exception 'Invalid payment method' using errcode = '22023'; end if;
 

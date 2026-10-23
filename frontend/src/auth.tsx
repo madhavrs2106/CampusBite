@@ -10,7 +10,7 @@ export type Profile = {
   id: string
   full_name: string
   student_id: string | null
-  role: 'student' | 'canteen_staff' | 'admin'
+  role: 'student' | 'faculty' | 'canteen_staff' | 'admin'
   account_status: 'active' | 'pending' | 'suspended'
   created_at: string
 }
@@ -23,12 +23,19 @@ type AuthValue = {
   profileError: string
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string, name: string, studentId: string) => Promise<boolean>
+  signUp: (
+    email: string,
+    password: string,
+    name: string,
+    studentId: string,
+    userType?: 'student' | 'faculty' | 'canteen_staff'
+  ) => Promise<boolean>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
   updateProfile: (fullName: string, studentId: string) => Promise<void>
-  setRole: (role: 'student' | 'canteen_staff' | 'admin') => Promise<void>
+  setRole: (role: 'student' | 'faculty' | 'canteen_staff' | 'admin') => Promise<void>
 }
+
 
 const Context = createContext<AuthValue | null>(null)
 
@@ -125,22 +132,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
       },
-      signUp: async (email, password, name, studentId) => {
+      signUp: async (email, password, name, studentId, userType = 'student') => {
         if (!supabase) throw new Error('Add Supabase credentials to frontend/.env.local first.')
+        const role = userType
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { full_name: name, student_id: studentId } },
+          options: {
+            data: {
+              full_name: name,
+              student_id: studentId,
+              role: role,
+              user_type: userType,
+            },
+          },
         })
         if (error) throw error
+        if (data.session) {
+          setSession(data.session)
+          localStorage.setItem('campusbite-dev-role', role)
+          setProfile({
+            id: data.user?.id ?? '',
+            full_name: name,
+            student_id: studentId,
+            role: role,
+            account_status: 'active',
+            created_at: data.user?.created_at || new Date().toISOString(),
+          })
+        }
         return !data.session
       },
       signOut: async () => {
+        localStorage.removeItem('campusbite-dev-role')
         if (supabase) {
           const { error } = await supabase.auth.signOut()
           if (error) throw error
         }
       },
+
       refreshProfile: async () => loadProfile(session),
       updateProfile: async (fullName: string, studentId: string) => {
         const cleanName = fullName.trim()
@@ -183,7 +212,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               }
         )
       },
-      setRole: async (newRole: 'student' | 'canteen_staff' | 'admin') => {
+      setRole: async (newRole: 'student' | 'faculty' | 'canteen_staff' | 'admin') => {
+
         localStorage.setItem('campusbite-dev-role', newRole)
         setProfile(prev =>
           prev
