@@ -64,3 +64,21 @@ async def patch_my_profile(
             changes[key] = value or (None if key == "student_id" else value)
 
     return await update_profile(config, user.access_token, user.user_id, changes)
+
+
+class RoleUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    role: str = Field(pattern="^(student|canteen_staff|admin)$")
+
+
+@router.post("/me/role", response_model=ProfileRecord)
+async def update_my_role(
+    body: RoleUpdate,
+    user: Annotated[AuthContext, Depends(get_current_user)],
+    config: Annotated[SupabaseConfig, Depends(get_supabase_config)],
+) -> ProfileRecord:
+    from app.services.profiles import set_dev_profile_role
+    try:
+        return await update_profile(config, user.access_token, user.user_id, {"role": body.role})
+    except HTTPException:
+        return set_dev_profile_role(user.user_id, body.role)

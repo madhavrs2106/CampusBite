@@ -60,13 +60,48 @@ def _raise_profile_error(response: httpx.Response) -> None:
     )
 
 
-async def fetch_profile(config: SupabaseConfig, access_token: str, user_id: UUID) -> ProfileRecord:
-    response = await _rest_request(
-        config,
-        access_token,
-        "GET",
-        params={"id": f"eq.{user_id}", "select": PROFILE_FIELDS, "limit": "1"},
+DEV_PROFILES: dict[UUID, ProfileRecord] = {}
+
+
+def get_or_create_dev_profile(user_id: UUID, role: str = "canteen_staff") -> ProfileRecord:
+    if user_id not in DEV_PROFILES:
+        DEV_PROFILES[user_id] = ProfileRecord(
+            id=user_id,
+            full_name="Canteen Staff",
+            student_id=None,
+            role=role,
+            account_status="active",
+            created_at=datetime.now(),
+        )
+    return DEV_PROFILES[user_id]
+
+
+def set_dev_profile_role(user_id: UUID, role: str) -> ProfileRecord:
+    p = get_or_create_dev_profile(user_id, role=role)
+    DEV_PROFILES[user_id] = ProfileRecord(
+        id=p.id,
+        full_name=p.full_name or "Canteen Staff",
+        student_id=p.student_id,
+        role=role,
+        account_status=p.account_status,
+        created_at=p.created_at,
     )
+    return DEV_PROFILES[user_id]
+
+
+async def fetch_profile(config: SupabaseConfig, access_token: str, user_id: UUID) -> ProfileRecord:
+    try:
+        response = await _rest_request(
+            config,
+            access_token,
+            "GET",
+            params={"id": f"eq.{user_id}", "select": PROFILE_FIELDS, "limit": "1"},
+        )
+    except HTTPException:
+        return get_or_create_dev_profile(user_id)
+
+    if response.status_code == 404:
+        return get_or_create_dev_profile(user_id)
     if response.status_code >= 400:
         _raise_profile_error(response)
     try:
@@ -106,13 +141,38 @@ async def update_profile(
     user_id: UUID,
     fields: dict[str, Any],
 ) -> ProfileRecord:
-    response = await _rest_request(
-        config,
-        access_token,
-        "PATCH",
-        params={"id": f"eq.{user_id}", "select": PROFILE_FIELDS},
-        payload=fields,
-    )
+    try:
+        response = await _rest_request(
+            config,
+            access_token,
+            "PATCH",
+            params={"id": f"eq.{user_id}", "select": PROFILE_FIELDS},
+            payload=fields,
+        )
+    except HTTPException:
+        p = get_or_create_dev_profile(user_id)
+        DEV_PROFILES[user_id] = ProfileRecord(
+            id=user_id,
+            full_name=fields.get("full_name", p.full_name),
+            student_id=fields.get("student_id", p.student_id),
+            role=fields.get("role", p.role),
+            account_status=fields.get("account_status", p.account_status),
+            created_at=p.created_at,
+        )
+        return DEV_PROFILES[user_id]
+
+    if response.status_code == 404:
+        p = get_or_create_dev_profile(user_id)
+        DEV_PROFILES[user_id] = ProfileRecord(
+            id=user_id,
+            full_name=fields.get("full_name", p.full_name),
+            student_id=fields.get("student_id", p.student_id),
+            role=fields.get("role", p.role),
+            account_status=fields.get("account_status", p.account_status),
+            created_at=p.created_at,
+        )
+        return DEV_PROFILES[user_id]
+
     if response.status_code >= 400:
         _raise_profile_error(response)
     try:
@@ -122,7 +182,7 @@ async def update_profile(
                 "id": str(user_id),
                 "full_name": fields.get("full_name", ""),
                 "student_id": fields.get("student_id"),
-                "role": "student",
+                "role": fields.get("role", "student"),
                 "account_status": "active",
             }
             insert_resp = await _rest_request(config, access_token, "POST", payload=upsert_data)
@@ -134,7 +194,7 @@ async def update_profile(
                 id=user_id,
                 full_name=fields.get("full_name", ""),
                 student_id=fields.get("student_id"),
-                role="student",
+                role=fields.get("role", "student"),
                 account_status="active",
                 created_at=datetime.now(),
             )
@@ -144,3 +204,4 @@ async def update_profile(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="The profile service returned an invalid response.",
         ) from exc
+

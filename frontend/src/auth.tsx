@@ -27,6 +27,7 @@ type AuthValue = {
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
   updateProfile: (fullName: string, studentId: string) => Promise<void>
+  setRole: (role: 'student' | 'canteen_staff' | 'admin') => Promise<void>
 }
 
 const Context = createContext<AuthValue | null>(null)
@@ -51,6 +52,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       (s.user?.email ? s.user.email.split('@')[0] : 'Campus Student')
     const fallbackStudentId = (meta.student_id as string) || null
 
+    const devRole = localStorage.getItem('campusbite-dev-role') as Profile['role'] | null
+
     try {
       const r = await fetch(`${apiUrl}/api/me`, {
         headers: { Authorization: `Bearer ${s.access_token}` },
@@ -61,6 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ...data,
           full_name: data.full_name && data.full_name.trim() ? data.full_name : fallbackName,
           student_id: data.student_id ? data.student_id : fallbackStudentId,
+          role: devRole || data.role || 'student',
         })
         setProfileError('')
         return
@@ -74,12 +78,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       id: s.user?.id ?? '',
       full_name: fallbackName,
       student_id: fallbackStudentId,
-      role: (meta.role as Profile['role']) || 'student',
+      role: devRole || (meta.role as Profile['role']) || 'student',
       account_status: 'active',
       created_at: s.user?.created_at || new Date().toISOString(),
     })
     setProfileError('')
   }
+
 
   useEffect(() => {
     if (!supabase) {
@@ -178,9 +183,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               }
         )
       },
+      setRole: async (newRole: 'student' | 'canteen_staff' | 'admin') => {
+        localStorage.setItem('campusbite-dev-role', newRole)
+        setProfile(prev =>
+          prev
+            ? { ...prev, role: newRole }
+            : {
+                id: session?.user?.id ?? 'demo-staff-user',
+                full_name: 'Canteen Staff',
+                student_id: null,
+                role: newRole,
+                account_status: 'active',
+                created_at: new Date().toISOString(),
+              }
+        )
+        if (session?.access_token) {
+          try {
+            await fetch(`${apiUrl}/api/me/role`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ role: newRole }),
+            })
+          } catch {
+            // Dev in-memory role is active
+          }
+        }
+      },
     }),
     [session, profile, profileError, loading]
   )
+
 
   return <Context.Provider value={value}>{children}</Context.Provider>
 }

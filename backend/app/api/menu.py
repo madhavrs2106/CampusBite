@@ -338,6 +338,29 @@ async def list_menu() -> list[MenuItem]:
     if not supabase_url or not anon_key:
         return SAMPLE_MENU
 
+    from app.services.dev_store import DEV_MENU_ITEMS
+
+    def _dev_items():
+        res = []
+        for row in DEV_MENU_ITEMS:
+            cat_name = (row.get("categories") or {}).get("name") or "Snacks"
+            res.append(
+                MenuItem(
+                    id=row["id"],
+                    name=row["name"],
+                    description=row["description"],
+                    category=cat_name,
+                    price_paise=row["price_paise"],
+                    is_available=bool(row.get("is_available", True)),
+                    is_vegetarian=bool(row.get("is_vegetarian", True)),
+                    contains_egg=bool(row.get("contains_egg", False)),
+                    ingredients_verified=bool(row.get("ingredients_verified", True)),
+                    tag=row.get("tag", "🌱"),
+                    color=row.get("color", "sand"),
+                )
+            )
+        return res
+
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
             # Strictly select only vegetarian, egg-free, and verified active items
@@ -353,10 +376,11 @@ async def list_menu() -> list[MenuItem]:
                 headers={"apikey": anon_key, "Authorization": f"Bearer {anon_key}"},
             )
     except httpx.RequestError:
-        return SAMPLE_MENU
+        return _dev_items()
 
     if response.status_code >= 400:
-        return SAMPLE_MENU
+        return _dev_items()
+
 
     try:
         rows = response.json()

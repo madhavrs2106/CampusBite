@@ -162,13 +162,11 @@ function App() {
           <Link className={location.pathname === '/profile' ? 'nav-active' : ''} to="/profile">
             Profile
           </Link>
-          {auth.profile &&
-            (auth.profile.role === 'canteen_staff' || auth.profile.role === 'admin') && (
-              <Link className={location.pathname === '/staff' ? 'nav-active' : ''} to="/staff">
-                Canteen
-              </Link>
-            )}
+          <Link className={location.pathname === '/staff' ? 'nav-active' : ''} to="/staff">
+            Kitchen
+          </Link>
           {auth.profile?.role === 'admin' && (
+
             <Link className={location.pathname === '/admin' ? 'nav-active' : ''} to="/admin">
               Admin
             </Link>
@@ -278,18 +276,16 @@ function App() {
                 <User size={18} />
                 <span>Profile</span>
               </Link>
-              {auth.profile &&
-                (auth.profile.role === 'canteen_staff' || auth.profile.role === 'admin') && (
-                  <Link
-                    className={location.pathname === '/staff' ? 'mobile-nav-link active' : 'mobile-nav-link'}
-                    to="/staff"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    <Coffee size={18} />
-                    <span>Canteen Kitchen</span>
-                  </Link>
-                )}
+              <Link
+                className={location.pathname === '/staff' ? 'mobile-nav-link active' : 'mobile-nav-link'}
+                to="/staff"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <Coffee size={18} />
+                <span>Canteen Kitchen</span>
+              </Link>
               {auth.profile?.role === 'admin' && (
+
                 <Link
                   className={location.pathname === '/admin' ? 'mobile-nav-link active' : 'mobile-nav-link'}
                   to="/admin"

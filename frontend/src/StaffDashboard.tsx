@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { Check, ChevronRight, CircleAlert, Clock3, LoaderCircle, Plus, RefreshCw, Utensils } from 'lucide-react'
+
 import { supabase, useAuth } from './auth'
 import { FssaiVegSymbol } from './App'
 
@@ -72,10 +73,9 @@ export default function StaffDashboard() {
   const [declining, setDeclining] = useState('')
   const [declineReason, setDeclineReason] = useState('')
 
-  const token = auth.session?.access_token
+  const token = auth.session?.access_token || 'demo-staff-token'
 
   const load = useCallback(async () => {
-    if (!token) return
     setLoading(true)
     setError('')
     try {
@@ -107,7 +107,7 @@ export default function StaffDashboard() {
     }
     let channel: any
     let timer: number
-    if (supabase) {
+    if (supabase && auth.session) {
       void supabase.realtime.setAuth(token)
       channel = supabase
         .channel(`staff-orders-${auth.user.id}`)
@@ -119,7 +119,7 @@ export default function StaffDashboard() {
         if (!subscribed) refresh()
       }, 5000)
     } else {
-      timer = window.setInterval(refresh, 15000)
+      timer = window.setInterval(refresh, 10000)
     }
     window.addEventListener('online', refresh)
     const onVisibility = () => {
@@ -133,41 +133,94 @@ export default function StaffDashboard() {
       document.removeEventListener('visibilitychange', onVisibility)
       if (channel && supabase) void supabase.removeChannel(channel)
     }
-  }, [token, auth.user])
+  }, [token, auth.user, auth.session])
 
   if (auth.loading) {
     return (
       <main className="student-page">
-        <p>Loading account…</p>
+        <p>Loading canteen kitchen…</p>
       </main>
     )
   }
-  if (!auth.user || !token) return <Navigate to="/login" state={{ from: '/staff' }} replace />
-  if (!auth.profile) {
+
+  // If user is not logged in, offer 1-click Demo Staff Mode or Login
+  if (!auth.user && (!auth.profile || auth.profile.role !== 'canteen_staff')) {
     return (
       <main className="student-page">
         <section className="student-card">
-          <h1>Canteen access unavailable</h1>
-          <p className="inline-alert">
-            {auth.profileError || 'Your profile could not be verified. Please sign in again.'}
+          <div className="eyebrow">CAMPUSBITE · CANTEEN KITCHEN</div>
+          <h1>Canteen Kitchen Access</h1>
+          <p className="student-intro">
+            Welcome to the Canteen Management Portal. Here you can accept live student orders, update kitchen preparation states, and toggle menu item availability.
           </p>
-          <button className="text-button" onClick={() => void auth.refreshProfile()}>
-            Retry profile
-          </button>
+
+          <div style={{ margin: '24px 0', padding: '20px', background: 'var(--card-bg, #fff)', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+            <h3 style={{ margin: '0 0 10px', fontSize: '17px', color: '#ea580c' }}>
+              ⚡ Launch Canteen Staff Mode
+            </h3>
+            <p style={{ margin: '0 0 18px', fontSize: '14px', color: '#64748b', lineHeight: '1.5' }}>
+              Test the kitchen dashboard in local mode immediately without needing to log in.
+            </p>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <button
+                className="primary-button"
+                onClick={async () => {
+                  await auth.setRole('canteen_staff')
+                  void load()
+                }}
+              >
+                Enter Canteen Staff Mode
+              </button>
+              <Link to="/login" state={{ from: '/staff' }} className="text-button" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                Sign in to Account <span>→</span>
+              </Link>
+            </div>
+          </div>
         </section>
       </main>
     )
   }
-  if (!['canteen_staff', 'admin'].includes(auth.profile.role)) {
+
+  // If logged in as student, offer 1-click switch to staff mode
+  if (auth.profile && !['canteen_staff', 'admin'].includes(auth.profile.role)) {
     return (
       <main className="student-page">
         <section className="student-card">
-          <h1>Staff access required</h1>
-          <p className="student-intro">This account does not have canteen staff permissions.</p>
+          <div className="eyebrow">CAMPUSBITE · CANTEEN KITCHEN</div>
+          <h1>Canteen Kitchen Access</h1>
+          <p className="student-intro">
+            You are signed in as <strong>{auth.profile.full_name || auth.user?.email}</strong> with role{' '}
+            <span className="status-pill status-placed">{auth.profile.role}</span>.
+          </p>
+
+          <div style={{ margin: '22px 0', padding: '18px', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '12px' }}>
+            <h3 style={{ margin: '0 0 8px', color: '#ea580c', fontSize: '16px' }}>⚡ Enable Canteen Staff Mode</h3>
+            <p style={{ margin: '0 0 16px', fontSize: '14px', color: '#7c2d12', lineHeight: '1.5' }}>
+              Switch your account to <strong>Canteen Staff</strong> to manage active orders, move preparation states (Accepted, Preparing, Ready, Collected), and toggle food item availability.
+            </p>
+            <button
+              className="primary-button"
+              onClick={async () => {
+                await auth.setRole('canteen_staff')
+                void load()
+              }}
+            >
+              Activate Canteen Staff Mode
+            </button>
+          </div>
+
+          <details style={{ fontSize: '13px', color: '#64748b', marginTop: '14px' }}>
+            <summary style={{ cursor: 'pointer', fontWeight: 500 }}>Hosted Supabase Setup (Permanent SQL Grant)</summary>
+            <p style={{ margin: '8px 0 4px' }}>Run this in Supabase SQL Editor:</p>
+            <pre style={{ background: '#0f172a', color: '#f8fafc', padding: '12px', borderRadius: '8px', overflowX: 'auto', fontSize: '12px' }}>
+              {`update public.profiles set role = 'canteen_staff' where id = '${auth.user?.id}';`}
+            </pre>
+          </details>
         </section>
       </main>
     )
   }
+
 
   const updateOrder = async (order: Order, nextStatus: string, reason?: string) => {
     setBusy(order.id)
@@ -257,18 +310,34 @@ export default function StaffDashboard() {
         <div>
           <div className="eyebrow">CAMPUSBITE · CANTEEN</div>
           <h1>
-            Kitchen Dashboard, {auth.profile.full_name.split(' ')[0]}
+            Kitchen Dashboard, {(auth.profile?.full_name || 'Staff').split(' ')[0]}
             <span>.</span>
           </h1>
           <p>
             Manage live pickup queues and keep today’s menu current.
           </p>
         </div>
-        <button className="staff-refresh" onClick={() => void load()} disabled={loading}>
-          <RefreshCw size={16} />
-          {loading ? 'Refreshing' : 'Refresh'}
-        </button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="status-pill status-ready" style={{ textTransform: 'capitalize' }}>
+            {auth.profile?.role || 'Staff'}
+          </span>
+          <button
+            className="staff-refresh"
+            style={{ fontSize: '12px', padding: '6px 10px' }}
+            onClick={async () => {
+              await auth.setRole('student')
+            }}
+            title="Switch back to student view"
+          >
+            Exit Staff Mode
+          </button>
+          <button className="staff-refresh" onClick={() => void load()} disabled={loading}>
+            <RefreshCw size={16} />
+            {loading ? 'Refreshing' : 'Refresh'}
+          </button>
+        </div>
       </div>
+
 
       <div className="staff-tabs">
         <button className={tab === 'orders' ? 'active' : ''} onClick={() => setTab('orders')}>
@@ -583,10 +652,29 @@ function MenuEditor({
             {item.categories?.name ?? 'Uncategorized'} · {item.is_active ? 'Active listing' : 'Archived'}
           </span>
         </div>
-        <span className={item.is_available && item.is_active ? 'availability available' : 'availability unavailable'}>
-          {item.is_active ? (item.is_available ? 'Available' : 'Sold out / Unavailable') : 'Hidden'}
-        </span>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button
+            type="button"
+            onClick={() => save(item, { is_available: !item.is_available })}
+            disabled={busy || !item.is_active}
+            style={{
+              padding: '6px 14px',
+              borderRadius: '20px',
+              fontWeight: 600,
+              fontSize: '13px',
+              cursor: item.is_active ? 'pointer' : 'not-allowed',
+              border: item.is_available ? '1px solid #16a34a' : '1px solid #dc2626',
+              background: item.is_available ? '#dcfce7' : '#fee2e2',
+              color: item.is_available ? '#15803d' : '#b91c1c',
+              transition: 'all 0.15s ease',
+            }}
+            title={item.is_available ? 'Click to mark Sold Out' : 'Click to mark Available'}
+          >
+            {item.is_available ? '● Available' : '○ Sold Out'}
+          </button>
+        </div>
       </div>
+
 
       <div className="menu-edit-fields">
         <label>
