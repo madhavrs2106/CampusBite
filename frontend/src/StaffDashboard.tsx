@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, ChevronRight, CircleAlert, Clock3, LoaderCircle, Plus, RefreshCw, Utensils } from 'lucide-react'
+import { Check, ChevronRight, CircleAlert, Clock3, LoaderCircle, Plus, RefreshCw, RotateCcw, Utensils } from 'lucide-react'
 
 import { supabase, useAuth } from './auth'
 import { FssaiVegSymbol } from './App'
@@ -334,6 +334,25 @@ export default function StaffDashboard() {
           <button className="staff-refresh" onClick={() => void load()} disabled={loading}>
             <RefreshCw size={16} />
             {loading ? 'Refreshing' : 'Refresh'}
+          </button>
+          <button
+            className="staff-refresh"
+            style={{ fontSize: '12px', padding: '6px 10px', color: '#b91c1c', borderColor: '#fca5a5', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+            onClick={async () => {
+              if (!window.confirm('Empty all localhost trial orders and reset menu items for a fresh start?')) return
+              try {
+                await fetch(`${apiUrl}/api/dev/reset`, { method: 'POST' })
+                localStorage.removeItem('campusbite-cart')
+                await load()
+                setSuccess('Localhost database cleaned! Orders reset to 0 and all items set to available.')
+              } catch {
+                setError('Could not reset database.')
+              }
+            }}
+            title="Clean/Empty database for a fresh trial"
+          >
+            <RotateCcw size={14} />
+            Reset Trial Data
           </button>
         </div>
       </div>

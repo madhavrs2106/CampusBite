@@ -1,4 +1,5 @@
 import os
+from typing import Any
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -53,3 +54,17 @@ app.include_router(payments_router, prefix="/api")
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "campusbite-api", "mode": "development-sample-data"}
+
+
+@app.post("/api/dev/reset")
+@app.get("/api/dev/reset")
+def reset_dev_database() -> dict[str, Any]:
+    from app.services.dev_store import reset_dev_store
+    from app.services.profiles import reset_dev_profiles
+    reset_dev_store()
+    reset_dev_profiles()
+    return {
+        "status": "ok",
+        "message": "Localhost development database cleared successfully: 0 orders, token counter reset to 101, all menu items set to available.",
+    }
+

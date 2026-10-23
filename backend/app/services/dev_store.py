@@ -15,7 +15,7 @@ DEV_CATEGORIES = [
 
 DEV_MENU_ITEMS: list[dict[str, Any]] = [
     {
-        "id": "item-1",
+        "id": "10000000-0000-0000-0000-000000000001",
         "name": "Poha",
         "description": "Tempered flattened rice with mustard seeds, curry leaves, turmeric & crunchy peanuts",
         "price_paise": 4000,
@@ -30,7 +30,7 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
         "color": "sand",
     },
     {
-        "id": "item-2",
+        "id": "10000000-0000-0000-0000-000000000002",
         "name": "Aloo Paratha",
         "description": "Spiced potato stuffed whole wheat flatbread served with fresh curd & pickle",
         "price_paise": 6000,
@@ -45,7 +45,7 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
         "color": "sand",
     },
     {
-        "id": "item-3",
+        "id": "10000000-0000-0000-0000-000000000003",
         "name": "Paneer Paratha",
         "description": "Grated cottage cheese & herb stuffed whole wheat flatbread served with butter",
         "price_paise": 8000,
@@ -60,7 +60,7 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
         "color": "rose",
     },
     {
-        "id": "item-4",
+        "id": "10000000-0000-0000-0000-000000000004",
         "name": "Idli Sambar",
         "description": "Steamed fermented rice & lentil cakes served with piping hot drumstick sambar",
         "price_paise": 5000,
@@ -75,7 +75,7 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
         "color": "sage",
     },
     {
-        "id": "item-5",
+        "id": "10000000-0000-0000-0000-000000000005",
         "name": "Masala Dosa",
         "description": "Crispy golden fermented crepe stuffed with spiced potato mash, served with chutneys",
         "price_paise": 7500,
@@ -90,7 +90,7 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
         "color": "sand",
     },
     {
-        "id": "item-6",
+        "id": "10000000-0000-0000-0000-000000000006",
         "name": "Veg Sandwich",
         "description": "Triple-layer toasted sandwich with cucumber, tomato, mint chutney & cheese",
         "price_paise": 5000,
@@ -105,7 +105,7 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
         "color": "sage",
     },
     {
-        "id": "item-7",
+        "id": "10000000-0000-0000-0000-000000000007",
         "name": "Samosa (2 pcs)",
         "description": "Flaky golden pastry filled with spiced potato & green peas, served with sweet & spicy chutneys",
         "price_paise": 3000,
@@ -120,7 +120,7 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
         "color": "sand",
     },
     {
-        "id": "item-8",
+        "id": "10000000-0000-0000-0000-000000000008",
         "name": "Masala Chai",
         "description": "Traditional Indian spiced milk tea brewed with ginger, cardamom, cloves & cinnamon",
         "price_paise": 2000,
@@ -135,7 +135,7 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
         "color": "sand",
     },
     {
-        "id": "item-9",
+        "id": "10000000-0000-0000-0000-000000000009",
         "name": "Filter Coffee",
         "description": "Authentic South Indian chicory blend filter coffee with frothy hot milk",
         "price_paise": 3000,
@@ -150,7 +150,7 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
         "color": "sand",
     },
     {
-        "id": "item-10",
+        "id": "10000000-0000-0000-0000-000000000010",
         "name": "Special Veg Thali",
         "description": "2 rotis, paneer sabzi, dal tadka, jeera rice, fresh salad, pickle, papad & sweet gulab jamun",
         "price_paise": 12000,
@@ -166,104 +166,18 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
     },
 ]
 
-now = datetime.now(timezone.utc).isoformat()
+DEV_ORDERS: list[dict[str, Any]] = []
 
-DEV_ORDERS: list[dict[str, Any]] = [
-    {
-        "id": "10000000-0000-0000-0000-000000000101",
-        "token_number": "101",
-        "status": "placed",
-        "payment_method": "pay_at_pickup",
-        "payment_status": "pending",
-        "total_paise": 8000,
-        "created_at": now,
-        "items": [
-            {
-                "id": "oi-1",
-                "menu_item_id": "item-1",
-                "item_name": "Poha",
-                "quantity": 1,
-                "unit_price_paise": 4000,
-                "line_total_paise": 4000,
-            },
-            {
-                "id": "oi-2",
-                "menu_item_id": "item-8",
-                "item_name": "Masala Chai",
-                "quantity": 2,
-                "unit_price_paise": 2000,
-                "line_total_paise": 4000,
-            },
-        ],
-    },
-    {
-        "id": "10000000-0000-0000-0000-000000000102",
-        "token_number": "102",
-        "status": "accepted",
-        "payment_method": "online",
-        "payment_status": "paid",
-        "total_paise": 10500,
-        "created_at": now,
-        "items": [
-            {
-                "id": "oi-3",
-                "menu_item_id": "item-5",
-                "item_name": "Masala Dosa",
-                "quantity": 1,
-                "unit_price_paise": 7500,
-                "line_total_paise": 7500,
-            },
-            {
-                "id": "oi-4",
-                "menu_item_id": "item-9",
-                "item_name": "Filter Coffee",
-                "quantity": 1,
-                "unit_price_paise": 3000,
-                "line_total_paise": 3000,
-            },
-        ],
-    },
-    {
-        "id": "10000000-0000-0000-0000-000000000103",
-        "token_number": "103",
-        "status": "preparing",
-        "payment_method": "pay_at_pickup",
-        "payment_status": "pending",
-        "total_paise": 6000,
-        "created_at": now,
-        "items": [
-            {
-                "id": "oi-5",
-                "menu_item_id": "item-2",
-                "item_name": "Aloo Paratha",
-                "quantity": 1,
-                "unit_price_paise": 6000,
-                "line_total_paise": 6000,
-            },
-        ],
-    },
-    {
-        "id": "10000000-0000-0000-0000-000000000104",
-        "token_number": "104",
-        "status": "ready",
-        "payment_method": "pay_at_pickup",
-        "payment_status": "pending",
-        "total_paise": 5000,
-        "created_at": now,
-        "items": [
-            {
-                "id": "oi-6",
-                "menu_item_id": "item-4",
-                "item_name": "Idli Sambar",
-                "quantity": 1,
-                "unit_price_paise": 5000,
-                "line_total_paise": 5000,
-            },
-        ],
-    },
-]
+token_counter = 101
 
-token_counter = 105
+
+def reset_dev_store() -> None:
+    global token_counter
+    DEV_ORDERS.clear()
+    token_counter = 101
+    for item in DEV_MENU_ITEMS:
+        item["is_available"] = True
+
 
 
 def get_dev_staff_menu() -> list[dict[str, Any]]:
@@ -290,7 +204,7 @@ def update_dev_menu_item(item_id: str, patch: dict[str, Any]) -> dict[str, Any]:
 
 
 def add_dev_menu_item(payload: dict[str, Any]) -> dict[str, Any]:
-    new_id = f"item-{len(DEV_MENU_ITEMS) + 1}"
+    new_id = str(uuid4())
     cat = next((c for c in DEV_CATEGORIES if c["id"] == payload.get("category_id")), None)
     item = {
         "id": new_id,

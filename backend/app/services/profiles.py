@@ -63,6 +63,11 @@ def _raise_profile_error(response: httpx.Response) -> None:
 DEV_PROFILES: dict[UUID, ProfileRecord] = {}
 
 
+def reset_dev_profiles() -> None:
+    DEV_PROFILES.clear()
+
+
+
 def get_or_create_dev_profile(user_id: UUID, role: str = "canteen_staff") -> ProfileRecord:
     if user_id not in DEV_PROFILES:
         DEV_PROFILES[user_id] = ProfileRecord(
