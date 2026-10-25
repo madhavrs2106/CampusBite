@@ -28,6 +28,7 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
         "ingredients_verified": True,
         "tag": "🥣",
         "color": "sand",
+        "image_url": "https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=600&q=80",
     },
     {
         "id": "10000000-0000-0000-0000-000000000002",
@@ -43,6 +44,7 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
         "ingredients_verified": True,
         "tag": "🫓",
         "color": "sand",
+        "image_url": "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?auto=format&fit=crop&w=600&q=80",
     },
     {
         "id": "10000000-0000-0000-0000-000000000003",
@@ -58,6 +60,7 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
         "ingredients_verified": True,
         "tag": "🫓",
         "color": "rose",
+        "image_url": "https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=600&q=80",
     },
     {
         "id": "10000000-0000-0000-0000-000000000004",
@@ -73,6 +76,7 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
         "ingredients_verified": True,
         "tag": "🥞",
         "color": "sage",
+        "image_url": "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?auto=format&fit=crop&w=600&q=80",
     },
     {
         "id": "10000000-0000-0000-0000-000000000005",
@@ -88,6 +92,7 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
         "ingredients_verified": True,
         "tag": "🥞",
         "color": "sand",
+        "image_url": "https://images.unsplash.com/photo-1668236543090-82eba5ee5976?auto=format&fit=crop&w=600&q=80",
     },
     {
         "id": "10000000-0000-0000-0000-000000000006",
@@ -103,6 +108,7 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
         "ingredients_verified": True,
         "tag": "🥪",
         "color": "sage",
+        "image_url": "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=600&q=80",
     },
     {
         "id": "10000000-0000-0000-0000-000000000007",
@@ -118,6 +124,7 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
         "ingredients_verified": True,
         "tag": "🥟",
         "color": "sand",
+        "image_url": "https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=600&q=80",
     },
     {
         "id": "10000000-0000-0000-0000-000000000008",
@@ -133,6 +140,7 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
         "ingredients_verified": True,
         "tag": "☕",
         "color": "sand",
+        "image_url": "https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&w=600&q=80",
     },
     {
         "id": "10000000-0000-0000-0000-000000000009",
@@ -148,6 +156,7 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
         "ingredients_verified": True,
         "tag": "☕",
         "color": "sand",
+        "image_url": "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=600&q=80",
     },
     {
         "id": "10000000-0000-0000-0000-000000000010",
@@ -163,24 +172,292 @@ DEV_MENU_ITEMS: list[dict[str, Any]] = [
         "ingredients_verified": True,
         "tag": "🍱",
         "color": "sand",
+        "image_url": "https://images.unsplash.com/photo-1610057099443-fde8c4d50f91?auto=format&fit=crop&w=600&q=80",
     },
 ]
 
-DEV_ORDERS: list[dict[str, Any]] = []
 
-token_counter = 101
+def _build_initial_seed_orders() -> list[dict[str, Any]]:
+    now = datetime.now(timezone.utc).isoformat()
+    return [
+        {
+            "id": "order-dev-001",
+            "user_id": "user-student-1",
+            "token_number": "101",
+            "status": "ready",
+            "payment_method": "online",
+            "payment_status": "paid",
+            "total_paise": 6000,
+            "created_at": now,
+            "customer_name": "Aarav Sharma",
+            "customer_role": "student",
+            "user_role": "student",
+            "customer_id": "Roll: 23CS104",
+            "notifications_sent": 1,
+            "last_notified_at": now,
+            "items": [
+                {
+                    "id": "oi-101-1",
+                    "menu_item_id": "10000000-0000-0000-0000-000000000001",
+                    "item_name": "Poha",
+                    "quantity": 1,
+                    "unit_price_paise": 4000,
+                    "line_total_paise": 4000,
+                },
+                {
+                    "id": "oi-101-2",
+                    "menu_item_id": "10000000-0000-0000-0000-000000000008",
+                    "item_name": "Masala Chai",
+                    "quantity": 1,
+                    "unit_price_paise": 2000,
+                    "line_total_paise": 2000,
+                },
+            ],
+        },
+        {
+            "id": "order-dev-002",
+            "user_id": "user-faculty-1",
+            "token_number": "102",
+            "status": "preparing",
+            "payment_method": "pay_at_pickup",
+            "payment_status": "pending",
+            "total_paise": 10500,
+            "created_at": now,
+            "customer_name": "Prof. Rajesh Kumar",
+            "customer_role": "faculty",
+            "user_role": "faculty",
+            "customer_id": "Faculty ID: CS-FAC-12",
+            "notifications_sent": 0,
+            "last_notified_at": None,
+            "items": [
+                {
+                    "id": "oi-102-1",
+                    "menu_item_id": "10000000-0000-0000-0000-000000000005",
+                    "item_name": "Masala Dosa",
+                    "quantity": 1,
+                    "unit_price_paise": 7500,
+                    "line_total_paise": 7500,
+                },
+                {
+                    "id": "oi-102-2",
+                    "menu_item_id": "10000000-0000-0000-0000-000000000009",
+                    "item_name": "Filter Coffee",
+                    "quantity": 1,
+                    "unit_price_paise": 3000,
+                    "line_total_paise": 3000,
+                },
+            ],
+        },
+        {
+            "id": "order-dev-003",
+            "user_id": "user-student-2",
+            "token_number": "103",
+            "status": "accepted",
+            "payment_method": "online",
+            "payment_status": "paid",
+            "total_paise": 8000,
+            "created_at": now,
+            "customer_name": "Sneha Patel",
+            "customer_role": "student",
+            "user_role": "student",
+            "customer_id": "Roll: 23EC088",
+            "notifications_sent": 0,
+            "last_notified_at": None,
+            "items": [
+                {
+                    "id": "oi-103-1",
+                    "menu_item_id": "10000000-0000-0000-0000-000000000006",
+                    "item_name": "Veg Sandwich",
+                    "quantity": 1,
+                    "unit_price_paise": 5000,
+                    "line_total_paise": 5000,
+                },
+                {
+                    "id": "oi-103-2",
+                    "menu_item_id": "10000000-0000-0000-0000-000000000009",
+                    "item_name": "Filter Coffee",
+                    "quantity": 1,
+                    "unit_price_paise": 3000,
+                    "line_total_paise": 3000,
+                },
+            ],
+        },
+        {
+            "id": "order-dev-004",
+            "user_id": "user-faculty-2",
+            "token_number": "104",
+            "status": "placed",
+            "payment_method": "online",
+            "payment_status": "paid",
+            "total_paise": 12000,
+            "created_at": now,
+            "customer_name": "Dr. Ananya Sen",
+            "customer_role": "faculty",
+            "user_role": "faculty",
+            "customer_id": "Faculty ID: PHY-FAC-04",
+            "notifications_sent": 0,
+            "last_notified_at": None,
+            "items": [
+                {
+                    "id": "oi-104-1",
+                    "menu_item_id": "10000000-0000-0000-0000-000000000010",
+                    "item_name": "Special Veg Thali",
+                    "quantity": 1,
+                    "unit_price_paise": 12000,
+                    "line_total_paise": 12000,
+                },
+            ],
+        },
+        {
+            "id": "order-dev-005",
+            "user_id": "user-student-3",
+            "token_number": "105",
+            "status": "placed",
+            "payment_method": "pay_at_pickup",
+            "payment_status": "pending",
+            "total_paise": 8000,
+            "created_at": now,
+            "customer_name": "Rohan Verma",
+            "customer_role": "student",
+            "user_role": "student",
+            "customer_id": "Roll: 22ME045",
+            "notifications_sent": 0,
+            "last_notified_at": None,
+            "items": [
+                {
+                    "id": "oi-105-1",
+                    "menu_item_id": "10000000-0000-0000-0000-000000000002",
+                    "item_name": "Aloo Paratha",
+                    "quantity": 1,
+                    "unit_price_paise": 6000,
+                    "line_total_paise": 6000,
+                },
+                {
+                    "id": "oi-105-2",
+                    "menu_item_id": "10000000-0000-0000-0000-000000000008",
+                    "item_name": "Masala Chai",
+                    "quantity": 1,
+                    "unit_price_paise": 2000,
+                    "line_total_paise": 2000,
+                },
+            ],
+        },
+        {
+            "id": "order-dev-006",
+            "user_id": "user-student-4",
+            "token_number": "106",
+            "status": "collected",
+            "payment_method": "online",
+            "payment_status": "paid",
+            "total_paise": 5000,
+            "created_at": now,
+            "customer_name": "Pooja Reddy",
+            "customer_role": "student",
+            "user_role": "student",
+            "customer_id": "Roll: 24IT012",
+            "notifications_sent": 1,
+            "last_notified_at": now,
+            "items": [
+                {
+                    "id": "oi-106-1",
+                    "menu_item_id": "10000000-0000-0000-0000-000000000007",
+                    "item_name": "Samosa (2 pcs)",
+                    "quantity": 1,
+                    "unit_price_paise": 3000,
+                    "line_total_paise": 3000,
+                },
+                {
+                    "id": "oi-106-2",
+                    "menu_item_id": "10000000-0000-0000-0000-000000000008",
+                    "item_name": "Masala Chai",
+                    "quantity": 1,
+                    "unit_price_paise": 2000,
+                    "line_total_paise": 2000,
+                },
+            ],
+        },
+        {
+            "id": "order-dev-007",
+            "user_id": "user-faculty-3",
+            "token_number": "107",
+            "status": "collected",
+            "payment_method": "online",
+            "payment_status": "paid",
+            "total_paise": 10000,
+            "created_at": now,
+            "customer_name": "Prof. Vikram Malhotra",
+            "customer_role": "faculty",
+            "user_role": "faculty",
+            "customer_id": "Faculty ID: MECH-HOD-01",
+            "notifications_sent": 1,
+            "last_notified_at": now,
+            "items": [
+                {
+                    "id": "oi-107-1",
+                    "menu_item_id": "10000000-0000-0000-0000-000000000003",
+                    "item_name": "Paneer Paratha",
+                    "quantity": 1,
+                    "unit_price_paise": 8000,
+                    "line_total_paise": 8000,
+                },
+                {
+                    "id": "oi-107-2",
+                    "menu_item_id": "10000000-0000-0000-0000-000000000008",
+                    "item_name": "Masala Chai",
+                    "quantity": 1,
+                    "unit_price_paise": 2000,
+                    "line_total_paise": 2000,
+                },
+            ],
+        },
+        {
+            "id": "order-dev-008",
+            "user_id": "user-student-5",
+            "token_number": "108",
+            "status": "collected",
+            "payment_method": "pay_at_pickup",
+            "payment_status": "paid",
+            "total_paise": 5000,
+            "created_at": now,
+            "customer_name": "Ishaan Gupta",
+            "customer_role": "student",
+            "user_role": "student",
+            "customer_id": "Roll: 23CS071",
+            "notifications_sent": 1,
+            "last_notified_at": now,
+            "items": [
+                {
+                    "id": "oi-108-1",
+                    "menu_item_id": "10000000-0000-0000-0000-000000000004",
+                    "item_name": "Idli Sambar",
+                    "quantity": 1,
+                    "unit_price_paise": 5000,
+                    "line_total_paise": 5000,
+                },
+            ],
+        },
+    ]
+
+
+DEV_ORDERS: list[dict[str, Any]] = _build_initial_seed_orders()
+
+token_counter = 109
 
 
 def reset_dev_store() -> None:
-    global token_counter
-    DEV_ORDERS.clear()
-    token_counter = 101
+    global token_counter, DEV_ORDERS
+    DEV_ORDERS = _build_initial_seed_orders()
+    token_counter = 109
     for item in DEV_MENU_ITEMS:
         item["is_available"] = True
-
+        item["is_active"] = True
 
 
 def get_dev_staff_menu() -> list[dict[str, Any]]:
+    return [dict(i) for i in DEV_MENU_ITEMS if i.get("is_active", True)]
+
+
+def get_dev_all_menu() -> list[dict[str, Any]]:
     return [dict(i) for i in DEV_MENU_ITEMS]
 
 
@@ -197,10 +474,17 @@ def update_dev_menu_item(item_id: str, patch: dict[str, Any]) -> dict[str, Any]:
                 if cat:
                     item["categories"] = {"name": cat["name"]}
             return dict(item)
-    # If not found, return dummy
     dummy = {"id": str(item_id), "name": "Menu Item", **patch}
     DEV_MENU_ITEMS.append(dummy)
     return dummy
+
+
+def delete_dev_menu_item(item_id: str) -> bool:
+    for idx, item in enumerate(DEV_MENU_ITEMS):
+        if str(item["id"]) == str(item_id):
+            DEV_MENU_ITEMS.pop(idx)
+            return True
+    return False
 
 
 def add_dev_menu_item(payload: dict[str, Any]) -> dict[str, Any]:
@@ -218,8 +502,9 @@ def add_dev_menu_item(payload: dict[str, Any]) -> dict[str, Any]:
         "is_vegetarian": True,
         "contains_egg": False,
         "ingredients_verified": payload.get("ingredients_verified", True),
-        "tag": "🌱",
-        "color": "sage",
+        "tag": payload.get("tag") or "🌱",
+        "color": payload.get("color") or "sage",
+        "image_url": payload.get("image_url") or "",
     }
     DEV_MENU_ITEMS.append(item)
     return item
@@ -228,7 +513,6 @@ def add_dev_menu_item(payload: dict[str, Any]) -> dict[str, Any]:
 def get_dev_orders(user_id: UUID | None = None) -> list[dict[str, Any]]:
     if user_id is None:
         return [dict(o) for o in DEV_ORDERS]
-    # For a specific user, return only orders matching user_id
     matching = [o for o in DEV_ORDERS if o.get("user_id") == str(user_id)]
     return [dict(o) for o in matching]
 
@@ -260,11 +544,36 @@ def transition_dev_order(order_id: str, next_status: str, decline_reason: str | 
                 order["decline_reason"] = decline_reason
             if next_status == "collected" and order.get("payment_method") == "pay_at_pickup":
                 order["payment_status"] = "paid"
+            if next_status == "ready":
+                order["notifications_sent"] = order.get("notifications_sent", 0) + 1
+                order["last_notified_at"] = datetime.now(timezone.utc).isoformat()
             return dict(order)
     raise KeyError(f"Order {order_id} not found in dev orders")
 
 
-def create_dev_order(items: list[dict[str, Any]], payment_method: str, user_id: UUID | None = None) -> dict[str, Any]:
+def notify_dev_order(order_id: str) -> dict[str, Any]:
+    for order in DEV_ORDERS:
+        if str(order["id"]) == str(order_id) or str(order.get("token_number")) == str(order_id):
+            order["notifications_sent"] = order.get("notifications_sent", 0) + 1
+            order["last_notified_at"] = datetime.now(timezone.utc).isoformat()
+            return {
+                "success": True,
+                "order_id": order["id"],
+                "token_number": order["token_number"],
+                "notifications_sent": order["notifications_sent"],
+                "last_notified_at": order["last_notified_at"],
+            }
+    raise KeyError(f"Order {order_id} not found")
+
+
+def create_dev_order(
+    items: list[dict[str, Any]],
+    payment_method: str,
+    user_id: UUID | None = None,
+    user_role: str = "student",
+    user_name: str | None = None,
+    customer_id: str | None = None,
+) -> dict[str, Any]:
     global token_counter
     token_str = str(token_counter)
     token_counter += 1
@@ -288,6 +597,9 @@ def create_dev_order(items: list[dict[str, Any]], payment_method: str, user_id: 
             "line_total_paise": line_total,
         })
 
+    resolved_name = user_name or ("Faculty Member" if user_role == "faculty" else "Student")
+    resolved_id = customer_id or ("Faculty ID: FAC-001" if user_role == "faculty" else "Roll: 24CS101")
+
     new_order = {
         "id": str(uuid4()),
         "user_id": str(user_id) if user_id else None,
@@ -297,7 +609,14 @@ def create_dev_order(items: list[dict[str, Any]], payment_method: str, user_id: 
         "payment_status": "paid" if payment_method == "online" else "pending",
         "total_paise": total,
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "customer_name": resolved_name,
+        "customer_role": user_role,
+        "user_role": user_role,
+        "customer_id": resolved_id,
+        "notifications_sent": 0,
+        "last_notified_at": None,
         "items": lines,
     }
     DEV_ORDERS.insert(0, new_order)
     return new_order
+

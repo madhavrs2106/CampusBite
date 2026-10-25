@@ -5,13 +5,32 @@ from typing import Annotated, Any, Literal
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.core.auth import AuthContext, SupabaseConfig, get_supabase_config, require_roles
+from app.core.auth import AuthContext, SupabaseConfig, get_current_user, get_supabase_config
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-AdminUser = Annotated[AuthContext, Depends(require_roles("admin"))]
+
+security_stealth = HTTPBearer(auto_error=False)
+
+
+async def require_admin_stealth(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security_stealth),
+) -> AuthContext:
+    if not credentials or not credentials.credentials:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+    try:
+        user = await get_current_user(credentials)
+    except HTTPException:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+    if user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+    return user
+
+
+AdminUser = Annotated[AuthContext, Depends(require_admin_stealth)]
 
 
 class AccountPatch(BaseModel):

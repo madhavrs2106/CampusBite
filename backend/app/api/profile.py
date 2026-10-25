@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -93,4 +93,52 @@ async def delete_my_profile(
 ) -> dict:
     from app.services.profiles import delete_profile
     return await delete_profile(config, user.access_token, user.user_id)
+
+
+class CleanupUserRequest(BaseModel):
+    email: str
+
+
+@router.post("/auth/cleanup-user")
+async def cleanup_deleted_user(body: CleanupUserRequest) -> dict[str, Any]:
+    import os
+    import httpx
+    from app.services.profiles import undelete_user
+
+    email = body.email.strip().lower()
+    service_role_key = (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+    supabase_url = (os.getenv("SUPABASE_URL") or "").rstrip("/")
+    if not service_role_key or not supabase_url:
+        return {"cleaned": False, "reason": "No SUPABASE_SERVICE_ROLE_KEY configured"}
+
+    headers = {
+        "apikey": service_role_key,
+        "Authorization": f"Bearer {service_role_key}",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(6.0)) as client:
+            resp = await client.get(f"{supabase_url}/auth/v1/admin/users", headers=headers)
+            if resp.status_code == 200:
+                data = resp.json()
+                users = data.get("users", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+                for u in users:
+                    if u.get("email", "").lower() == email:
+                        uid = u.get("id")
+                        del_resp = await client.delete(f"{supabase_url}/auth/v1/admin/users/{uid}", headers=headers)
+                        if del_resp.status_code < 300:
+                            undelete_user(uid)
+                            return {"cleaned": True, "user_id": uid}
+    except Exception as exc:
+        return {"cleaned": False, "error": str(exc)}
+
+    return {"cleaned": False, "reason": "User not found or already deleted"}
+
+
+@router.post("/me/reactivate", status_code=status.HTTP_200_OK)
+async def reactivate_my_profile(
+    user: Annotated[AuthContext, Depends(get_current_user)],
+) -> dict[str, str]:
+    from app.services.profiles import undelete_user
+    undelete_user(user.user_id)
+    return {"status": "ok", "message": "Account reactivated successfully."}
 

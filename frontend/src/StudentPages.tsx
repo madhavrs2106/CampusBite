@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { AlertTriangle, ArrowRight, ChevronRight, Edit3, LogOut, RefreshCw, ShoppingBag, Trash2, User, Utensils } from 'lucide-react'
-import { supabase, useAuth } from './auth'
+import { AlertTriangle, ArrowRight, BellRing, CheckCircle2, ChevronRight, Edit3, LogOut, RefreshCw, ShoppingBag, Trash2, User, Utensils } from 'lucide-react'
+import { supabase, useAuth, resolveDisplayName } from './auth'
 import { FssaiVegSymbol, MenuItem } from './App'
 
 const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
@@ -23,6 +23,8 @@ type Order = {
   total_paise: number
   created_at: string
   decline_reason?: string | null
+  notifications_sent?: number
+  last_notified_at?: string | null
   items: OrderItem[]
 }
 
@@ -70,19 +72,30 @@ export function AuthPage({ register = false }: { register?: boolean }) {
   const [busy, setBusy] = useState(false)
   const [userType, setUserType] = useState<'student' | 'faculty' | 'canteen_staff'>('student')
 
-  if (auth.user) return <Navigate to="/profile" replace />
+  const [registeredEmail, setRegisteredEmail] = useState('')
+  const [resetSent, setResetSent] = useState(false)
+  const [resetBusy, setResetBusy] = useState(false)
+
+  if (auth.user) {
+    const from = (location.state as { from?: string } | null)?.from
+    if (from) return <Navigate to={from} replace />
+    if (auth.profile?.role === 'canteen_staff') return <Navigate to="/staff" replace />
+    return <Navigate to="/profile" replace />
+  }
 
   const submit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
     setNotice('')
     setWarning('')
+    setRegisteredEmail('')
     setBusy(true)
     const f = new FormData(e.currentTarget)
+    const enteredEmail = String(f.get('email') || '').trim().toLowerCase()
     try {
       if (register) {
         const confirmation = await auth.signUp(
-          String(f.get('email')),
+          enteredEmail,
           String(f.get('password')),
           String(f.get('name')),
           String(f.get('student_id')),
@@ -94,16 +107,17 @@ export function AuthPage({ register = false }: { register?: boolean }) {
           navigate(userType === 'canteen_staff' ? '/staff' : '/profile')
         }
       } else {
-        await auth.signIn(String(f.get('email')), String(f.get('password')))
-        const dest = (location.state as { from?: string } | null)?.from ?? '/profile'
-        navigate(dest)
+        await auth.signIn(enteredEmail, String(f.get('password')))
+        const dest = (location.state as { from?: string } | null)?.from
+        if (dest) navigate(dest)
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Could not complete request.'
       if (msg.toLowerCase().includes('email not confirmed')) {
         setError('Email not confirmed yet. In Supabase Dashboard → Authentication → Users, click on your user and choose "Confirm email", or turn off "Confirm email" under Authentication → Providers → Email.')
-      } else if (msg.toLowerCase().includes('user already registered')) {
-        setError('User already registered. If you previously deleted this profile, Supabase isolates credentials in auth.users. To register again with this email, please delete the user row from Supabase Dashboard → Authentication → Users or run the delete_user_self migration in SQL Editor.')
+      } else if (msg.toLowerCase().includes('already registered')) {
+        setRegisteredEmail(enteredEmail)
+        setError('This email is already registered in campus authentication. If you previously deleted this profile or already have an account, you can sign in directly or send a password reset link to re-claim it.')
       } else {
         setError(msg)
       }
@@ -124,7 +138,64 @@ export function AuthPage({ register = false }: { register?: boolean }) {
           Supabase is not configured yet. Set <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> in <code>frontend/.env</code>.
         </p>
       )}
-      {error && <p className="inline-alert">{error}</p>}
+      {error && (
+        <div className="inline-alert">
+          <p style={{ margin: 0 }}>{error}</p>
+          {registeredEmail && (
+            <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="text-button"
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  color: '#0f172a',
+                }}
+                disabled={resetBusy || resetSent}
+                onClick={async () => {
+                  setResetBusy(true)
+                  try {
+                    if (supabase) {
+                      await supabase.auth.resetPasswordForEmail(registeredEmail)
+                      setResetSent(true)
+                      setNotice(`Password reset link sent to ${registeredEmail}! Check your inbox to set a new password and sign in.`)
+                    }
+                  } catch (e) {
+                    setError('Could not send reset link. ' + (e instanceof Error ? e.message : ''))
+                  } finally {
+                    setResetBusy(false)
+                  }
+                }}
+              >
+                {resetSent ? '✓ Reset Link Sent' : resetBusy ? 'Sending…' : `Send password reset link to ${registeredEmail}`}
+              </button>
+              <Link
+                to="/login"
+                className="text-button"
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: '#ea580c',
+                  textDecoration: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                }}
+              >
+                Sign in instead →
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
       {warning && (
         <p className="inline-alert" style={{ background: '#fffbeb', borderColor: '#fde68a', color: '#92400e' }}>
           <strong>Note:</strong> {warning}
@@ -282,12 +353,14 @@ export function ProfilePage() {
   const [deleting, setDeleting] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
 
+  const currentDisplayName = resolveDisplayName(a.profile?.full_name, a.user?.email, a.profile?.role)
+
   useEffect(() => {
     if (a.profile) {
-      setName(a.profile.full_name || '')
+      setName(resolveDisplayName(a.profile.full_name, a.user?.email, a.profile.role))
       setStudentId(a.profile.student_id || '')
     }
-  }, [a.profile])
+  }, [a.profile, a.user?.email])
 
   if (!a.user) {
     return (
@@ -361,7 +434,7 @@ export function ProfilePage() {
           {!isEditing && (
             <button
               onClick={() => {
-                setName(a.profile?.full_name || '')
+                setName(currentDisplayName)
                 setStudentId(a.profile?.student_id || '')
                 setIsEditing(true)
               }}
@@ -383,8 +456,8 @@ export function ProfilePage() {
 
         <div className="profile-user-summary" style={{ margin: '18px 0 24px' }}>
           <div className="profile-avatar">
-            {a.profile?.full_name
-              ? a.profile.full_name
+            {currentDisplayName
+              ? currentDisplayName
                   .split(' ')
                   .map(n => n[0])
                   .slice(0, 2)
@@ -394,7 +467,7 @@ export function ProfilePage() {
           </div>
           <div className="profile-user-details">
             <h2 style={{ margin: 0, fontSize: '22px', color: '#0f172a' }}>
-              {a.profile?.full_name || 'Campus Student'}
+              {currentDisplayName}
             </h2>
             <p style={{ margin: '4px 0', fontSize: '13px', color: '#64748b' }}>
               {a.user.email}
@@ -453,14 +526,16 @@ export function ProfilePage() {
         ) : (
           <dl className="profile-list" style={{ borderTop: '1px solid #f1f5f9', paddingTop: '18px' }}>
             <dt>Full Name</dt>
-            <dd>{a.profile?.full_name || '—'}</dd>
+            <dd>{currentDisplayName}</dd>
             <dt>Campus Email</dt>
             <dd>{a.user.email}</dd>
-            <dt>Student ID / Roll</dt>
+            <dt>{a.profile?.role === 'faculty' ? 'Faculty ID' : a.profile?.role === 'canteen_staff' ? 'Staff ID' : 'Student ID / Roll'}</dt>
             <dd>{a.profile?.student_id || 'Not registered'}</dd>
             <dt>Campus Role</dt>
             <dd>
-              <span className="status-pill status-ready">{a.profile?.role || 'student'}</span>
+              <span className="status-pill status-ready" style={{ textTransform: 'capitalize' }}>
+                {a.profile?.role === 'canteen_staff' ? 'Canteen Staff' : a.profile?.role === 'faculty' ? 'Faculty' : 'Student'}
+              </span>
             </dd>
             <dt>Account Status</dt>
             <dd>{a.profile?.account_status || 'active'}</dd>
@@ -470,7 +545,7 @@ export function ProfilePage() {
         <div className="profile-quick-actions" style={{ marginTop: '24px' }}>
           <button
             onClick={() => {
-              setName(a.profile?.full_name || '')
+              setName(currentDisplayName)
               setStudentId(a.profile?.student_id || '')
               setIsEditing(!isEditing)
             }}
@@ -488,6 +563,16 @@ export function ProfilePage() {
             <Utensils size={15} />
             <span>Browse Menu</span>
           </Link>
+          {a.profile?.role === 'canteen_staff' && (
+            <Link
+              to="/staff"
+              className="profile-action-btn secondary"
+              style={{ borderColor: '#ea580c', color: '#ea580c', fontWeight: 600 }}
+            >
+              <Utensils size={15} />
+              <span>Canteen Kitchen</span>
+            </Link>
+          )}
           <button
             onClick={() => void a.refreshProfile()}
             className="profile-action-btn secondary"
@@ -602,7 +687,7 @@ export function ProfilePage() {
               </div>
 
               <p style={{ fontSize: '14px', color: '#475569', lineHeight: '1.5', margin: '0 0 16px' }}>
-                Permanently delete all profile details for <strong>{a.profile?.full_name || a.user.email}</strong>. Your profile information, active cart, and order records will be permanently removed.
+                Permanently delete all profile details for <strong>{currentDisplayName}</strong> ({a.user.email}). Your profile information, active cart, and order records will be permanently removed.
               </p>
 
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
@@ -849,7 +934,7 @@ export function CheckoutPage({
         },
         modal: { ondismiss: () => setBusy(false) },
         prefill: {
-          name: a.profile?.full_name ?? '',
+          name: resolveDisplayName(a.profile?.full_name, a.user?.email, a.profile?.role),
           email: a.user?.email ?? '',
         },
         theme: { color: '#273b2e' },
@@ -1148,6 +1233,35 @@ export function TrackingPage() {
               <p className="inline-alert">This order was declined. Reason: {order.decline_reason || 'No reason provided'}.</p>
             )}
             {order.status === 'cancelled' && <p className="inline-alert">This order has been cancelled.</p>}
+
+            {order.status === 'ready' && (
+              <div className="order-ready-notification-banner">
+                <div className="ready-bell-circle">
+                  <BellRing size={24} />
+                </div>
+                <div>
+                  <strong>🔔 YOUR FOOD IS READY FOR PICKUP!</strong>
+                  <p>
+                    Your order is freshly prepared and hot at the counter. Please show <strong>Token #{order.token_number}</strong> to collect your food.
+                  </p>
+                  {(order.notifications_sent ?? 0) > 1 && (
+                    <small className="ready-urgent-reminder">
+                      ⚠️ Counter Notification Reminder: Canteen staff sent a notification ({order.notifications_sent} times)!
+                    </small>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {order.status === 'collected' && (
+              <div className="order-delivered-banner">
+                <CheckCircle2 size={22} color="#16a34a" />
+                <div>
+                  <strong>Order Handed Over &amp; Delivered</strong>
+                  <p>Billing completed. Enjoy your fresh meal!</p>
+                </div>
+              </div>
+            )}
 
             <dl className="profile-list">
               <dt>Status</dt>

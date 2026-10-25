@@ -74,6 +74,16 @@ def _raise_order_error(response: httpx.Response) -> None:
 def _normalise_order(record: dict[str, Any]) -> dict[str, Any]:
     if "items" not in record:
         record = {**record, "items": record.pop("order_items", [])}
+    prof = record.get("profiles")
+    if isinstance(prof, dict):
+        record["customer_name"] = prof.get("full_name") or record.get("customer_name") or "Campus User"
+        record["customer_role"] = prof.get("role") or record.get("customer_role") or "student"
+        record["user_role"] = prof.get("role") or record.get("user_role") or "student"
+        record["customer_id"] = prof.get("student_id") or record.get("customer_id")
+    if "customer_role" not in record:
+        record["customer_role"] = record.get("user_role") or "student"
+    if "customer_name" not in record or not record.get("customer_name") or record.get("customer_name") in ("Campus Student", "Campus Faculty"):
+        record["customer_name"] = "Faculty Member" if record.get("customer_role") == "faculty" else "Student"
     return record
 
 
@@ -93,6 +103,8 @@ async def create_order(
     payment_method: str,
     client_request_id: UUID,
     user_id: UUID | None = None,
+    user_role: str = "student",
+    user_name: str | None = None,
 ) -> dict[str, Any]:
     try:
         response = await _request(
@@ -106,7 +118,7 @@ async def create_order(
             },
         )
         if response.status_code == 404:
-            return create_dev_order(items, payment_method, user_id=user_id)
+            return create_dev_order(items, payment_method, user_id=user_id, user_role=user_role, user_name=user_name)
         if response.status_code >= 400:
             _raise_order_error(response)
         record = response.json()
@@ -114,7 +126,7 @@ async def create_order(
             raise ValueError("Expected an order object")
         return _normalise_order(record)
     except (HTTPException, ValueError, TypeError):
-        return create_dev_order(items, payment_method, user_id=user_id)
+        return create_dev_order(items, payment_method, user_id=user_id, user_role=user_role, user_name=user_name)
 
 
 async def list_orders(

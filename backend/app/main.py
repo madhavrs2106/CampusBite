@@ -41,7 +41,7 @@ allowed_origins = list(dict.fromkeys(configured_origins + default_dev_origins))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=r"^https:\/\/.*\.vercel\.app$",
+    allow_origin_regex=r"^(https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?|https:\/\/.*\.vercel\.app)$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -50,7 +50,7 @@ app.include_router(menu_router, prefix="/api")
 app.include_router(profile_router, prefix="/api")
 app.include_router(orders_router, prefix="/api")
 app.include_router(staff_router, prefix="/api")
-app.include_router(admin_router, prefix="/api")
+app.include_router(admin_router, prefix="/api", include_in_schema=False)
 app.include_router(payments_router, prefix="/api")
 
 @app.get("/health")

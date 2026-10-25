@@ -30,6 +30,9 @@ class MenuItemCreate(BaseModel):
     ingredients_verified: bool = False
     is_available: bool = True
     is_active: bool = True
+    image_url: str | None = None
+    tag: str | None = None
+    color: str | None = None
 
 
 class MenuItemPatch(BaseModel):
@@ -44,6 +47,9 @@ class MenuItemPatch(BaseModel):
     ingredients_verified: bool | None = None
     is_available: bool | None = None
     is_active: bool | None = None
+    image_url: str | None = None
+    tag: str | None = None
+    color: str | None = None
 
 
 async def _request(
@@ -101,10 +107,15 @@ def _check(response: httpx.Response) -> Any:
         raise HTTPException(status_code=502, detail="The canteen service returned invalid data.") from exc
 
 
+from datetime import datetime, timezone
 from app.services.dev_store import (
     add_dev_menu_item,
+    delete_dev_menu_item,
+    get_dev_all_menu,
     get_dev_categories,
+    get_dev_orders,
     get_dev_staff_menu,
+    notify_dev_order,
     update_dev_menu_item,
 )
 
@@ -232,4 +243,106 @@ async def update_menu_item(
         return records[0]
     except HTTPException:
         return update_dev_menu_item(item_id, payload)
+
+
+@router.delete("/menu/{item_id}", status_code=status.HTTP_200_OK)
+async def delete_menu_item(
+    item_id: str,
+    user: StaffUser,
+    config: Annotated[SupabaseConfig, Depends(get_supabase_config)],
+) -> dict[str, Any]:
+    delete_dev_menu_item(item_id)
+    try:
+        await _request(
+            config,
+            user,
+            "menu_items",
+            method="DELETE",
+            params={"id": f"eq.{item_id}"},
+        )
+    except Exception:
+        pass
+    return {"deleted": True, "item_id": item_id}
+
+
+@router.post("/orders/{order_id}/notify", status_code=status.HTTP_200_OK)
+async def notify_order(
+    order_id: str,
+    user: StaffUser,
+) -> dict[str, Any]:
+    try:
+        return notify_dev_order(order_id)
+    except KeyError:
+        return {
+            "success": True,
+            "order_id": order_id,
+            "token_number": order_id,
+            "notifications_sent": 1,
+            "last_notified_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+
+@router.get("/stats")
+async def staff_stats(
+    user: StaffUser,
+    config: Annotated[SupabaseConfig, Depends(get_supabase_config)],
+) -> dict[str, Any]:
+    all_orders = get_dev_orders(None)
+
+    student_orders = [o for o in all_orders if o.get("customer_role") == "student" or o.get("user_role") == "student"]
+    faculty_orders = [o for o in all_orders if o.get("customer_role") == "faculty" or o.get("user_role") == "faculty"]
+
+    student_count = len(student_orders)
+    faculty_count = len(faculty_orders)
+    student_revenue = sum(o.get("total_paise", 0) for o in student_orders)
+    faculty_revenue = sum(o.get("total_paise", 0) for o in faculty_orders)
+
+    active_statuses = {"placed", "accepted", "preparing", "ready"}
+    student_active = len([o for o in student_orders if o.get("status") in active_statuses])
+    faculty_active = len([o for o in faculty_orders if o.get("status") in active_statuses])
+    student_delivered = len([o for o in student_orders if o.get("status") == "collected"])
+    faculty_delivered = len([o for o in faculty_orders if o.get("status") == "collected"])
+
+    status_counts = {
+        "placed": len([o for o in all_orders if o.get("status") == "placed"]),
+        "accepted": len([o for o in all_orders if o.get("status") == "accepted"]),
+        "preparing": len([o for o in all_orders if o.get("status") == "preparing"]),
+        "ready": len([o for o in all_orders if o.get("status") == "ready"]),
+        "collected": len([o for o in all_orders if o.get("status") == "collected"]),
+        "declined": len([o for o in all_orders if o.get("status") == "declined"]),
+        "cancelled": len([o for o in all_orders if o.get("status") == "cancelled"]),
+    }
+
+    # Calculate popular items
+    item_stats: dict[str, dict[str, Any]] = {}
+    for o in all_orders:
+        role = o.get("customer_role") or o.get("user_role") or "student"
+        for line in o.get("items", []):
+            name = line.get("item_name", "Dish")
+            qty = line.get("quantity", 1)
+            if name not in item_stats:
+                item_stats[name] = {"name": name, "total_qty": 0, "student_qty": 0, "faculty_qty": 0}
+            item_stats[name]["total_qty"] += qty
+            if role == "faculty":
+                item_stats[name]["faculty_qty"] += qty
+            else:
+                item_stats[name]["student_qty"] += qty
+
+    popular_items = sorted(item_stats.values(), key=lambda x: x["total_qty"], reverse=True)[:6]
+
+    return {
+        "total_orders": len(all_orders),
+        "student_orders_count": student_count,
+        "faculty_orders_count": faculty_count,
+        "student_revenue_paise": student_revenue,
+        "faculty_revenue_paise": faculty_revenue,
+        "student_active_count": student_active,
+        "faculty_active_count": faculty_active,
+        "student_delivered_count": student_delivered,
+        "faculty_delivered_count": faculty_delivered,
+        "status_counts": status_counts,
+        "popular_items": popular_items,
+        "today_student_count": student_count,
+        "today_faculty_count": faculty_count,
+    }
 

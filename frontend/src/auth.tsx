@@ -40,6 +40,51 @@ type AuthValue = {
 
 const Context = createContext<AuthValue | null>(null)
 
+export function formatNameFromEmail(email?: string | null): string {
+  if (!email) return ''
+  const local = email.split('@')[0]
+  const cleaned = local.replace(/[._-]+/g, ' ').replace(/\d+$/, '').trim()
+  if (!cleaned) return email.split('@')[0]
+  return cleaned
+    .split(' ')
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ')
+}
+
+export function isGenericName(name?: string | null): boolean {
+  if (!name) return true
+  const n = name.trim().toLowerCase()
+  return (
+    n === 'campus student' ||
+    n === 'campus faculty' ||
+    n === 'faculty member' ||
+    n === 'canteen staff demo' ||
+    n === 'unnamed user' ||
+    n === 'student'
+  )
+}
+
+export function resolveDisplayName(
+  fullName?: string | null,
+  email?: string | null,
+  role?: string | null
+): string {
+  const raw = (fullName ?? '').trim()
+  if (raw && !isGenericName(raw)) {
+    return raw
+  }
+
+  const fromEmail = formatNameFromEmail(email)
+  if (fromEmail) {
+    return fromEmail
+  }
+
+  if (role === 'faculty') return 'Faculty Member'
+  if (role === 'canteen_staff') return 'Canteen Staff'
+  return 'Student'
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -64,10 +109,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const meta = s.user?.user_metadata ?? {}
-    const fallbackName =
-      (meta.full_name as string) ||
-      (meta.name as string) ||
-      (s.user?.email ? s.user.email.split('@')[0] : 'Campus Student')
+    const emailName = formatNameFromEmail(s.user?.email)
+    const rawMetaName = ((meta.full_name as string) || (meta.name as string) || '').trim()
+    const fallbackName = resolveDisplayName(rawMetaName || emailName, s.user?.email, (meta.role as string) || 'student')
     const fallbackStudentId = (meta.student_id as string) || null
 
     const devRole = localStorage.getItem('campusbite-dev-role') as Profile['role'] | null
@@ -88,9 +132,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       if (r.ok) {
         const data = (await r.json()) as Profile
+        const resolvedName = resolveDisplayName(
+          rawMetaName || (!isGenericName(data.full_name) ? data.full_name : '') || emailName,
+          s.user?.email,
+          devRole || data.role || 'student'
+        )
         setProfile({
           ...data,
-          full_name: data.full_name && data.full_name.trim() ? data.full_name : fallbackName,
+          full_name: resolvedName,
           student_id: data.student_id ? data.student_id : fallbackStudentId,
           role: devRole || data.role || 'student',
         })
@@ -101,7 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Backend /api/me might be loading or offline
     }
 
-    // Reliable fallback to auth session metadata so student name and roll no always show
+    // Reliable fallback to auth session metadata so student/faculty name and roll no always show
     setProfile({
       id: s.user?.id ?? '',
       full_name: fallbackName,
@@ -150,18 +199,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       signIn: async (email, password) => {
         if (!supabase) throw new Error('Add Supabase credentials to frontend/.env.local first.')
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+        const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password })
         if (error) throw error
         if (data?.user?.user_metadata?.is_deleted) {
-          await supabase.auth.signOut().catch(() => {})
-          throw new Error('This account has been permanently deleted. Please create a new account.')
+          // Reactivate previously deleted account
+          await supabase.auth.updateUser({
+            data: { is_deleted: false, deleted_at: null },
+          }).catch(() => {})
+          if (data.session?.access_token) {
+            await fetch(`${apiUrl}/api/me/reactivate`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${data.session.access_token}` },
+            }).catch(() => {})
+          }
         }
       },
       signUp: async (email, password, name, studentId, userType = 'student') => {
         if (!supabase) throw new Error('Add Supabase credentials to frontend/.env.local first.')
         const role = userType
-        const { data, error } = await supabase.auth.signUp({
-          email,
+        const cleanEmail = email.trim().toLowerCase()
+
+        // 1. Attempt initial sign up
+        let { data, error } = await supabase.auth.signUp({
+          email: cleanEmail,
           password,
           options: {
             data: {
@@ -169,9 +229,95 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               student_id: studentId,
               role: role,
               user_type: userType,
+              is_deleted: false,
             },
           },
         })
+
+        // If email already exists in auth.users (e.g. from previously deleted profile)
+        if (error && error.message.toLowerCase().includes('already registered')) {
+          // A. Attempt backend admin cleanup (deletes row from auth.users if service_role_key is configured)
+          try {
+            const cleanRes = await fetch(`${apiUrl}/api/auth/cleanup-user`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: cleanEmail }),
+            })
+            const cleanData = await cleanRes.json().catch(() => null)
+            if (cleanData?.cleaned) {
+              const retry = await supabase.auth.signUp({
+                email: cleanEmail,
+                password,
+                options: {
+                  data: {
+                    full_name: name,
+                    student_id: studentId,
+                    role: role,
+                    user_type: userType,
+                    is_deleted: false,
+                  },
+                },
+              })
+              if (!retry.error) {
+                if (retry.data.session) {
+                  setSession(retry.data.session)
+                  localStorage.setItem('campusbite-dev-role', role)
+                  setProfile({
+                    id: retry.data.user?.id ?? '',
+                    full_name: name,
+                    student_id: studentId,
+                    role: role,
+                    account_status: 'active',
+                    created_at: retry.data.user?.created_at || new Date().toISOString(),
+                  })
+                }
+                return !retry.data.session
+              }
+            }
+          } catch {
+            // Backend cleanup not available
+          }
+
+          // B. Attempt authentication with the credentials just entered (reclaims previously deleted account)
+          try {
+            const loginRes = await supabase.auth.signInWithPassword({
+              email: cleanEmail,
+              password,
+            })
+            if (loginRes.data.session && loginRes.data.user) {
+              await supabase.auth.updateUser({
+                data: {
+                  full_name: name,
+                  student_id: studentId,
+                  role: role,
+                  user_type: userType,
+                  is_deleted: false,
+                  deleted_at: null,
+                },
+              })
+              if (loginRes.data.session.access_token) {
+                await fetch(`${apiUrl}/api/me/reactivate`, {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${loginRes.data.session.access_token}` },
+                }).catch(() => {})
+              }
+              setSession(loginRes.data.session)
+              localStorage.setItem('campusbite-dev-role', role)
+              setProfile({
+                id: loginRes.data.user.id,
+                full_name: name,
+                student_id: studentId,
+                role: role,
+                account_status: 'active',
+                created_at: loginRes.data.user.created_at || new Date().toISOString(),
+              })
+              return false
+            }
+          } catch {
+            // Password did not match existing account
+          }
+        }
+
         if (error) throw error
         if (data.session) {
           setSession(data.session)
@@ -189,9 +335,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
       signOut: async () => {
         localStorage.removeItem('campusbite-dev-role')
+        setSession(null)
+        setProfile(null)
+        setProfileError('')
         if (supabase) {
-          const { error } = await supabase.auth.signOut()
-          if (error) throw error
+          try {
+            await supabase.auth.signOut()
+          } catch {
+            // Ignore offline errors
+          }
         }
       },
 
@@ -238,20 +390,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         )
       },
       setRole: async (newRole: 'student' | 'faculty' | 'canteen_staff' | 'admin') => {
-
         localStorage.setItem('campusbite-dev-role', newRole)
-        setProfile(prev =>
-          prev
-            ? { ...prev, role: newRole }
-            : {
-                id: session?.user?.id ?? 'demo-staff-user',
-                full_name: 'Canteen Staff',
-                student_id: null,
-                role: newRole,
-                account_status: 'active',
-                created_at: new Date().toISOString(),
-              }
-        )
+        setProfile(prev => {
+          if (prev) {
+            return { ...prev, role: newRole }
+          }
+          const defaultName = resolveDisplayName(null, session?.user?.email, newRole)
+          return {
+            id: session?.user?.id ?? 'demo-user',
+            full_name: defaultName,
+            student_id: newRole === 'faculty' ? 'FAC-101' : newRole === 'student' ? '2026CS101' : null,
+            role: newRole,
+            account_status: 'active',
+            created_at: new Date().toISOString(),
+          }
+        })
         if (session?.access_token) {
           try {
             await fetch(`${apiUrl}/api/me/role`, {
@@ -319,14 +472,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // ignore
           }
 
-          // C. If user is still in auth.users (missing service_role key or RPC not migrated):
-          // Scramble password to an unguessable string so user CANNOT log in again with their password,
-          // and wipe metadata so name, student ID and details are deleted.
+          // C. If user could not be deleted from auth.users via admin API or RPC:
+          // Wipe profile details and mark is_deleted: true. We do NOT scramble the password,
+          // so the user can re-register or reclaim their account without being blocked in auth.users.
           if (!authDeleted) {
             try {
-              const unguessablePassword = `DEL_${crypto.randomUUID()}_${Date.now()}!${Math.random().toString(36)}#Aa`
               await supabase.auth.updateUser({
-                password: unguessablePassword,
                 data: {
                   full_name: '',
                   student_id: '',

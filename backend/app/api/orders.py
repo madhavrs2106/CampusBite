@@ -47,6 +47,8 @@ async def post_order(
         payment_method=body.payment_method,
         client_request_id=body.client_request_id,
         user_id=user.user_id,
+        user_role=user.role,
+        user_name=user.full_name,
     )
 
 

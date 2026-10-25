@@ -115,16 +115,26 @@ async def get_current_user(
         from datetime import datetime
         if "admin" in credentials.credentials:
             dev_role = "admin"
+            dev_name = "Admin Operator"
+            dev_id = None
         elif "staff" in credentials.credentials:
             dev_role = "canteen_staff"
+            dev_name = "Canteen Staff"
+            dev_id = "STF-01"
+        elif "faculty" in credentials.credentials:
+            dev_role = "faculty"
+            dev_name = "Dr. Ramesh Kumar"
+            dev_id = "FAC-201"
         else:
             dev_role = "student"
+            dev_name = "Madhav Sharma"
+            dev_id = "2026CS101"
         return AuthContext(
             user_id=UUID("00000000-0000-0000-0000-000000000099"),
             role=dev_role,
             account_status="active",
-            full_name="Canteen Staff Demo",
-            student_id=None,
+            full_name=dev_name,
+            student_id=dev_id,
             created_at=datetime.now(),
             access_token=credentials.credentials,
         )
@@ -166,16 +176,24 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
 
-    from app.services.profiles import fetch_profile, is_user_deleted
+    from app.services.profiles import fetch_profile, is_user_deleted, undelete_user
 
-    if is_user_deleted(user_id) or claims.get("user_metadata", {}).get("is_deleted") is True:
+    meta = dict(claims.get("user_metadata") or {})
+    if "email" not in meta and claims.get("email"):
+        meta["email"] = claims["email"]
+
+    # If the user has reactivated their account (is_deleted is explicitly false), unmark it
+    if meta.get("is_deleted") is False:
+        undelete_user(user_id)
+
+    if is_user_deleted(user_id) or meta.get("is_deleted") is True:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="This account has been deleted.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    profile = await fetch_profile(config, credentials.credentials, user_id)
+    profile = await fetch_profile(config, credentials.credentials, user_id, meta=meta)
     if profile.account_status != "active":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account is not active.")
     return AuthContext(

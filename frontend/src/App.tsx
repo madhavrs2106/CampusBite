@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { App as CapacitorApp } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 import {
   ArrowRight,
-  ClipboardList,
   Clock3,
   Coffee,
   Heart,
   Home,
+  LayoutDashboard,
   Menu as MenuIcon,
   Minus,
   Plus,
@@ -19,10 +19,11 @@ import {
   X,
 } from 'lucide-react'
 import { Link, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { useAuth } from './auth'
+import { useAuth, resolveDisplayName, supabase } from './auth'
 import { AuthPage, CartPage, CheckoutPage, OrdersPage, ProfilePage, TrackingPage } from './StudentPages'
 import StaffDashboard from './StaffDashboard'
-import AdminDashboard from './AdminDashboard'
+
+const AdminDashboard = lazy(() => import('./AdminDashboard'))
 
 export type MenuItem = {
   id: string | number
@@ -40,6 +41,8 @@ export type MenuItem = {
 
 type Cart = Record<string, number>
 const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+const adminSecretPath =
+  (import.meta.env.VITE_ADMIN_SECRET_PATH as string | undefined)?.trim() || 'campus-ops-portal-98x4'
 
 export function FssaiVegSymbol() {
   return (
@@ -85,25 +88,138 @@ function App() {
   const [cartOpen, setCartOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
+  // Stealth hotkey: Ctrl + Shift + Alt + A opens secret admin portal if logged in as admin
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.altKey && (e.key === 'A' || e.key === 'a')) {
+        if (auth.profile?.role === 'admin') {
+          e.preventDefault()
+          navigate(`/${adminSecretPath}`)
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [auth.profile?.role, navigate])
+
+  // Stealth logo 5-click counter: tapping the coffee mark 5 times within 2 seconds opens secret admin portal if admin
+  const logoClicksRef = useRef<{ count: number; timer: number | null }>({ count: 0, timer: null })
+  const handleBrandMarkClick = (e: React.MouseEvent) => {
+    if (auth.profile?.role !== 'admin') return
+    const state = logoClicksRef.current
+    state.count += 1
+    if (state.timer) window.clearTimeout(state.timer)
+    if (state.count >= 5) {
+      e.preventDefault()
+      state.count = 0
+      navigate(`/${adminSecretPath}`)
+      return
+    }
+    state.timer = window.setTimeout(() => {
+      state.count = 0
+    }, 2000)
+  }
+
   useEffect(() => {
     setMobileMenuOpen(false)
   }, [location.pathname])
 
   useEffect(() => {
-    fetch(`${apiUrl}/api/menu`)
-      .then(async r => {
-        if (!r.ok) throw new Error()
-        return r.json() as Promise<MenuItem[]>
-      })
-      .then(data => {
-        // Enforce vegetarian items only (non-veg is prohibited)
-        const vegOnly = data.filter(i => (i.is_vegetarian ?? true) && !(i.contains_egg ?? false))
-        setItems(vegOnly)
-      })
-      .catch(() =>
-        setError('Could not load the menu. Check that the API is running at http://localhost:8000, then refresh.')
-      )
-      .finally(() => setLoading(false))
+    let active = true
+
+    const loadMenu = async () => {
+      // 1. Try backend API if not an HTTPS -> HTTP mixed content block
+      const isMixedContent =
+        typeof window !== 'undefined' &&
+        window.location.protocol === 'https:' &&
+        apiUrl.startsWith('http://')
+
+      if (!isMixedContent) {
+        try {
+          const res = await fetch(`${apiUrl}/api/menu`)
+          if (res.ok) {
+            const data = (await res.json()) as MenuItem[]
+            if (active) {
+              const vegOnly = data.filter(i => (i.is_vegetarian ?? true) && !(i.contains_egg ?? false))
+              setItems(vegOnly)
+              setError('')
+              setLoading(false)
+              return
+            }
+          }
+        } catch {
+          // Fall through to Supabase direct fetch
+        }
+      }
+
+      // 2. Direct Supabase fallback
+      if (supabase) {
+        try {
+          const { data, error: supaErr } = await supabase
+            .from('menu_items')
+            .select('id, name, description, price_paise, is_available, is_vegetarian, contains_egg, categories(name)')
+            .eq('is_active', true)
+            .eq('is_vegetarian', true)
+            .eq('contains_egg', false)
+            .order('name')
+
+          if (!supaErr && data && data.length > 0) {
+            const CATEGORY_TAGS: Record<string, [string, string]> = {
+              Breakfast: ['🥣', 'sand'],
+              'North Indian': ['🍲', 'sand'],
+              'South Indian': ['🥞', 'rose'],
+              Snacks: ['🥟', 'sand'],
+              'Street Food': ['🥘', 'rose'],
+              'Sandwiches and Burgers': ['🥪', 'sage'],
+              'Rice and Meals': ['🍛', 'sand'],
+              'Pizza and Bakery': ['🍕', 'sand'],
+              'Sweets and Desserts': ['🍯', 'rose'],
+              Beverages: ['☕', 'blue'],
+            }
+            const mapped: MenuItem[] = (data as any[]).map(row => {
+              const catName = row.categories?.name || 'Snacks'
+              const [tag, color] = CATEGORY_TAGS[catName] || ['🌱', 'sage']
+              return {
+                id: row.id,
+                name: row.name,
+                description: row.description || '',
+                category: catName,
+                price_paise: row.price_paise,
+                is_available: row.is_available ?? true,
+                is_vegetarian: true,
+                contains_egg: false,
+                ingredients_verified: true,
+                tag,
+                color,
+              }
+            })
+            if (active) {
+              setItems(mapped)
+              setError('')
+              setLoading(false)
+              return
+            }
+          }
+        } catch {
+          // Both failed
+        }
+      }
+
+      if (active) {
+        setError(
+          apiUrl.includes('localhost')
+            ? 'Backend API is not reachable. In production, configure VITE_API_URL in your Vercel project settings.'
+            : 'Could not load the menu. Please check your network connection and refresh.'
+        )
+        setLoading(false)
+      }
+    }
+
+    void loadMenu()
+
+    return () => {
+      active = false
+    }
   }, [])
 
   useEffect(() => {
@@ -135,13 +251,11 @@ function App() {
   const update = (id: string | number, d: number) =>
     setCart(c => ({ ...c, [String(id)]: Math.max(0, (c[String(id)] ?? 0) + d) }))
 
-  const isStudentOrFaculty =
-    Boolean(auth.user) &&
-    (auth.profile?.role === 'student' ||
-      auth.profile?.role === 'faculty' ||
-      Boolean(auth.profile?.student_id && auth.profile?.role !== 'canteen_staff' && auth.profile?.role !== 'admin'))
+  const isStaff = auth.profile?.role === 'canteen_staff'
 
-  const showKitchen = !isStudentOrFaculty && (auth.profile?.role === 'canteen_staff' || auth.profile?.role === 'admin' || !auth.user)
+  const showKitchen =
+    Boolean(auth.user) &&
+    (auth.profile?.role === 'canteen_staff' || auth.profile?.role === 'admin')
 
   return (
     <div className="app-shell">
@@ -154,46 +268,84 @@ function App() {
           >
             {mobileMenuOpen ? <X size={22} /> : <MenuIcon size={22} />}
           </button>
-          <Link to="/" className="brand">
-            <span className="brand-mark">
+          <Link to={isStaff ? "/staff" : "/"} className="brand">
+            <span className="brand-mark" onClick={handleBrandMarkClick}>
               <Coffee size={18} />
             </span>
             <span>
               campus<span className="brand-accent">bite</span>
             </span>
+            {isStaff && <span className="staff-brand-tag">STAFF</span>}
           </Link>
         </div>
-        <nav className="desktop-nav">
-          <Link className={location.pathname === '/' ? 'nav-active' : ''} to="/">
-            Home
-          </Link>
-          <Link className={location.pathname === '/menu' ? 'nav-active' : ''} to="/menu">
-            Menu
-          </Link>
-          <Link className={location.pathname === '/orders' ? 'nav-active' : ''} to="/orders">
-            My Orders
-          </Link>
-          <Link className={location.pathname === '/profile' ? 'nav-active' : ''} to="/profile">
-            Profile
-          </Link>
-          {showKitchen && (
-            <Link className={location.pathname === '/staff' ? 'nav-active' : ''} to="/staff">
-              Kitchen
-            </Link>
-          )}
-          {auth.profile?.role === 'admin' && (
 
-            <Link className={location.pathname === '/admin' ? 'nav-active' : ''} to="/admin">
-              Admin
+        {isStaff ? (
+          <nav className="desktop-nav staff-desktop-nav">
+            <Link
+              className={location.pathname === '/' || location.pathname === '/staff' || location.pathname === '/staff/home' ? 'nav-active' : ''}
+              to="/staff"
+            >
+              Home
             </Link>
-          )}
-          <a href="/#about">About</a>
-        </nav>
+            <Link
+              className={location.pathname === '/menu' || location.pathname === '/staff/menu' ? 'nav-active' : ''}
+              to="/staff/menu"
+            >
+              Menu
+            </Link>
+            <Link
+              className={location.pathname === '/orders' || location.pathname === '/staff/orders' ? 'nav-active' : ''}
+              to="/staff/orders"
+            >
+              Orders
+            </Link>
+            <Link
+              className={location.pathname === '/profile' || location.pathname === '/staff/profile' ? 'nav-active' : ''}
+              to="/staff/profile"
+            >
+              Profile
+            </Link>
+          </nav>
+        ) : (
+          <nav className="desktop-nav">
+            <Link className={location.pathname === '/' ? 'nav-active' : ''} to="/">
+              Home
+            </Link>
+            <Link className={location.pathname === '/menu' ? 'nav-active' : ''} to="/menu">
+              Menu
+            </Link>
+            <Link className={location.pathname === '/orders' ? 'nav-active' : ''} to="/orders">
+              My Orders
+            </Link>
+            <Link className={location.pathname === '/profile' ? 'nav-active' : ''} to="/profile">
+              Profile
+            </Link>
+            {showKitchen && (
+              <Link className={location.pathname === '/staff' ? 'nav-active' : ''} to="/staff">
+                Kitchen
+              </Link>
+            )}
+            <a href="/#about">About</a>
+          </nav>
+        )}
+
         <div className="top-actions">
-          {auth.user ? (
+          {isStaff ? (
+            <div className="top-actions-staff">
+              <span className="topbar-staff-pill">
+                <span className="live-dot" /> Staff Mode
+              </span>
+              <Link className="signin desktop-only" to="/staff/profile">
+                {auth.profile?.full_name?.split(' ')[0] ?? 'Staff'}
+              </Link>
+              <button className="signin desktop-only" onClick={() => void auth.signOut()}>
+                Sign out
+              </button>
+            </div>
+          ) : auth.user ? (
             <>
               <Link className="signin desktop-only" to="/profile">
-                {auth.profile?.full_name?.split(' ')[0] ?? 'Profile'}
+                {resolveDisplayName(auth.profile?.full_name, auth.user.email, auth.profile?.role).split(' ')[0] || 'Profile'}
               </Link>
               <button className="signin desktop-only" onClick={() => void auth.signOut()}>
                 Sign out
@@ -204,15 +356,18 @@ function App() {
               Sign in
             </Link>
           )}
-          <button
-            className="cart-button"
-            onClick={() => navigate('/cart')}
-            aria-label={`Open cart, ${count} items`}
-          >
-            <ShoppingBag size={17} />
-            <span className="cart-label">Cart</span>
-            {count > 0 && <b>{count}</b>}
-          </button>
+
+          {!isStaff && (
+            <button
+              className="cart-button"
+              onClick={() => navigate('/cart')}
+              aria-label={`Open cart, ${count} items`}
+            >
+              <ShoppingBag size={17} />
+              <span className="cart-label">Cart</span>
+              {count > 0 && <b>{count}</b>}
+            </button>
+          )}
         </div>
       </header>
 
@@ -220,13 +375,14 @@ function App() {
         <div className="mobile-drawer-backdrop" onClick={() => setMobileMenuOpen(false)}>
           <aside className="mobile-drawer" onClick={e => e.stopPropagation()}>
             <div className="mobile-drawer-header">
-              <Link to="/" className="brand" onClick={() => setMobileMenuOpen(false)}>
+              <Link to={isStaff ? "/staff" : "/"} className="brand" onClick={() => setMobileMenuOpen(false)}>
                 <span className="brand-mark">
                   <Coffee size={18} />
                 </span>
                 <span>
                   campus<span className="brand-accent">bite</span>
                 </span>
+                {isStaff && <span className="staff-brand-tag">STAFF</span>}
               </Link>
               <button
                 className="close-button"
@@ -240,80 +396,108 @@ function App() {
             {auth.user && auth.profile && (
               <div className="mobile-user-card">
                 <div className="profile-avatar">
-                  {auth.profile.full_name
-                    ? auth.profile.full_name
-                        .split(' ')
-                        .map(n => n[0])
-                        .slice(0, 2)
-                        .join('')
-                        .toUpperCase()
-                    : 'CB'}
+                  {resolveDisplayName(auth.profile.full_name, auth.user.email, auth.profile.role)
+                    .split(' ')
+                    .map(n => n[0])
+                    .slice(0, 2)
+                    .join('')
+                    .toUpperCase() || 'CB'}
                 </div>
                 <div className="mobile-user-info">
-                  <strong>{auth.profile.full_name || 'Student'}</strong>
+                  <strong>{resolveDisplayName(auth.profile.full_name, auth.user.email, auth.profile.role)}</strong>
                   <small>{auth.user.email}</small>
-                  {auth.profile.student_id && (
+                  {isStaff ? (
+                    <span className="profile-student-id">Role: Canteen Staff</span>
+                  ) : auth.profile.role === 'faculty' ? (
+                    <span className="profile-student-id">Faculty ID: {auth.profile.student_id || 'Not registered'}</span>
+                  ) : auth.profile.student_id ? (
                     <span className="profile-student-id">Roll: {auth.profile.student_id}</span>
-                  )}
+                  ) : null}
                 </div>
               </div>
             )}
 
-            <nav className="mobile-nav-links">
-              <Link
-                className={location.pathname === '/' ? 'mobile-nav-link active' : 'mobile-nav-link'}
-                to="/"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <Home size={18} />
-                <span>Home</span>
-              </Link>
-              <Link
-                className={location.pathname === '/menu' ? 'mobile-nav-link active' : 'mobile-nav-link'}
-                to="/menu"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <Utensils size={18} />
-                <span>Menu</span>
-              </Link>
-              <Link
-                className={location.pathname === '/orders' ? 'mobile-nav-link active' : 'mobile-nav-link'}
-                to="/orders"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <Clock3 size={18} />
-                <span>My Orders</span>
-              </Link>
-              <Link
-                className={location.pathname === '/profile' ? 'mobile-nav-link active' : 'mobile-nav-link'}
-                to="/profile"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <User size={18} />
-                <span>Profile</span>
-              </Link>
-              {showKitchen && (
+            {isStaff ? (
+              <nav className="mobile-nav-links">
                 <Link
-                  className={location.pathname === '/staff' ? 'mobile-nav-link active' : 'mobile-nav-link'}
+                  className={location.pathname === '/' || location.pathname === '/staff' || location.pathname === '/staff/home' ? 'mobile-nav-link active' : 'mobile-nav-link'}
                   to="/staff"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  <Coffee size={18} />
-                  <span>Canteen Kitchen</span>
+                  <LayoutDashboard size={18} />
+                  <span>Home (Staff Stats)</span>
                 </Link>
-              )}
-              {auth.profile?.role === 'admin' && (
-
                 <Link
-                  className={location.pathname === '/admin' ? 'mobile-nav-link active' : 'mobile-nav-link'}
-                  to="/admin"
+                  className={location.pathname === '/menu' || location.pathname === '/staff/menu' ? 'mobile-nav-link active' : 'mobile-nav-link'}
+                  to="/staff/menu"
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  <ClipboardList size={18} />
-                  <span>Admin Dashboard</span>
+                  <Utensils size={18} />
+                  <span>Menu Management</span>
                 </Link>
-              )}
-            </nav>
+                <Link
+                  className={location.pathname === '/orders' || location.pathname === '/staff/orders' ? 'mobile-nav-link active' : 'mobile-nav-link'}
+                  to="/staff/orders"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Clock3 size={18} />
+                  <span>Orders Queue</span>
+                </Link>
+                <Link
+                  className={location.pathname === '/profile' || location.pathname === '/staff/profile' ? 'mobile-nav-link active' : 'mobile-nav-link'}
+                  to="/staff/profile"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <User size={18} />
+                  <span>Staff Profile</span>
+                </Link>
+              </nav>
+            ) : (
+              <nav className="mobile-nav-links">
+                <Link
+                  className={location.pathname === '/' ? 'mobile-nav-link active' : 'mobile-nav-link'}
+                  to="/"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Home size={18} />
+                  <span>Home</span>
+                </Link>
+                <Link
+                  className={location.pathname === '/menu' ? 'mobile-nav-link active' : 'mobile-nav-link'}
+                  to="/menu"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Utensils size={18} />
+                  <span>Menu</span>
+                </Link>
+                <Link
+                  className={location.pathname === '/orders' ? 'mobile-nav-link active' : 'mobile-nav-link'}
+                  to="/orders"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Clock3 size={18} />
+                  <span>My Orders</span>
+                </Link>
+                <Link
+                  className={location.pathname === '/profile' ? 'mobile-nav-link active' : 'mobile-nav-link'}
+                  to="/profile"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <User size={18} />
+                  <span>Profile</span>
+                </Link>
+                {showKitchen && (
+                  <Link
+                    className={location.pathname === '/staff' ? 'mobile-nav-link active' : 'mobile-nav-link'}
+                    to="/staff"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <Coffee size={18} />
+                    <span>Canteen Kitchen</span>
+                  </Link>
+                )}
+              </nav>
+            )}
 
             <div className="mobile-drawer-footer">
               {auth.user ? (
@@ -351,12 +535,38 @@ function App() {
       )}
 
       <Routes>
-        <Route path="/admin" element={<AdminDashboard />} />
+        <Route
+          path="/admin"
+          element={
+            <Suspense fallback={<main className="student-page"><section className="student-card"><p>Loading…</p></section></main>}>
+              <AdminDashboard />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/admin-portal"
+          element={
+            <Suspense fallback={<main className="student-page"><section className="student-card"><p>Loading…</p></section></main>}>
+              <AdminDashboard />
+            </Suspense>
+          }
+        />
+        <Route
+          path={`/${adminSecretPath}`}
+          element={
+            <Suspense fallback={<main className="student-page"><section className="student-card"><p>Loading…</p></section></main>}>
+              <AdminDashboard />
+            </Suspense>
+          }
+        />
         <Route
           path="/"
           element={
-            <main>
-              <section className="hero">
+            isStaff ? (
+              <StaffDashboard initialTab="home" />
+            ) : (
+              <main>
+                <section className="hero">
                 <div className="hero-copy">
                   <div className="eyebrow">
                     <span className="live-dot" /> YOUR CAMPUS CANTEEN, REIMAGINED
@@ -565,11 +775,15 @@ function App() {
                 </span>
               </footer>
             </main>
-          }
-        />
-        <Route
-          path="/menu"
-          element={
+          )
+        }
+      />
+      <Route
+        path="/menu"
+        element={
+          isStaff ? (
+            <StaffDashboard initialTab="menu" />
+          ) : (
             <main className="menu-route">
               <section className="menu-section">
                 <div className="section-heading">
@@ -653,21 +867,32 @@ function App() {
                 </div>
               </section>
             </main>
-          }
-        />
-        <Route path="/login" element={<AuthPage />} />
-        <Route path="/register" element={<AuthPage register />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/cart" element={<CartPage items={items} cart={cart} update={update} />} />
-        <Route
-          path="/checkout"
-          element={
-            <CheckoutPage items={items} cart={cart} clearCart={() => setCart({})} />
-          }
-        />
-        <Route path="/orders" element={<OrdersPage />} />
-        <Route path="/staff" element={<StaffDashboard />} />
-        <Route path="/orders/:orderId" element={<TrackingPage />} />
+          )
+        }
+      />
+      <Route path="/login" element={<AuthPage />} />
+      <Route path="/register" element={<AuthPage register />} />
+      <Route
+        path="/profile"
+        element={isStaff ? <StaffDashboard initialTab="profile" /> : <ProfilePage />}
+      />
+      <Route path="/cart" element={<CartPage items={items} cart={cart} update={update} />} />
+      <Route
+        path="/checkout"
+        element={
+          <CheckoutPage items={items} cart={cart} clearCart={() => setCart({})} />
+        }
+      />
+      <Route
+        path="/orders"
+        element={isStaff ? <StaffDashboard initialTab="orders" /> : <OrdersPage />}
+      />
+      <Route path="/staff" element={<StaffDashboard initialTab="home" />} />
+      <Route path="/staff/home" element={<StaffDashboard initialTab="home" />} />
+      <Route path="/staff/menu" element={<StaffDashboard initialTab="menu" />} />
+      <Route path="/staff/orders" element={<StaffDashboard initialTab="orders" />} />
+      <Route path="/staff/profile" element={<StaffDashboard initialTab="profile" />} />
+      <Route path="/orders/:orderId" element={<TrackingPage />} />
         <Route
           path="*"
           element={
@@ -760,50 +985,83 @@ function App() {
       )}
 
       {/* Mobile Bottom Navigation Bar */}
-      <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-        <Link
-          to="/"
-          className={location.pathname === '/' ? 'mobile-tab active' : 'mobile-tab'}
-        >
-          <Home size={20} />
-          <span>Home</span>
-        </Link>
-        <Link
-          to="/menu"
-          className={location.pathname === '/menu' ? 'mobile-tab active' : 'mobile-tab'}
-        >
-          <Utensils size={20} />
-          <span>Menu</span>
-        </Link>
-        <Link
-          to="/cart"
-          className={location.pathname === '/cart' ? 'mobile-tab active' : 'mobile-tab'}
-        >
-          <div className="mobile-tab-icon-wrap">
-            <ShoppingBag size={20} />
-            {count > 0 && <span className="mobile-cart-badge">{count}</span>}
-          </div>
-          <span>Cart</span>
-        </Link>
-        <Link
-          to="/orders"
-          className={location.pathname.startsWith('/orders') ? 'mobile-tab active' : 'mobile-tab'}
-        >
-          <Clock3 size={20} />
-          <span>Orders</span>
-        </Link>
-        <Link
-          to={auth.user ? '/profile' : '/login'}
-          className={
-            location.pathname === '/profile' || location.pathname === '/login'
-              ? 'mobile-tab active'
-              : 'mobile-tab'
-          }
-        >
-          <User size={20} />
-          <span>{auth.user ? 'Profile' : 'Sign in'}</span>
-        </Link>
-      </nav>
+      {isStaff ? (
+        <nav className="mobile-bottom-nav staff-mobile-bottom-nav" aria-label="Staff mobile navigation">
+          <Link
+            to="/staff"
+            className={location.pathname === '/' || location.pathname === '/staff' || location.pathname === '/staff/home' ? 'mobile-tab active' : 'mobile-tab'}
+          >
+            <LayoutDashboard size={20} />
+            <span>Home</span>
+          </Link>
+          <Link
+            to="/staff/menu"
+            className={location.pathname === '/menu' || location.pathname === '/staff/menu' ? 'mobile-tab active' : 'mobile-tab'}
+          >
+            <Utensils size={20} />
+            <span>Menu</span>
+          </Link>
+          <Link
+            to="/staff/orders"
+            className={location.pathname === '/orders' || location.pathname === '/staff/orders' ? 'mobile-tab active' : 'mobile-tab'}
+          >
+            <Clock3 size={20} />
+            <span>Orders</span>
+          </Link>
+          <Link
+            to="/staff/profile"
+            className={location.pathname === '/profile' || location.pathname === '/staff/profile' ? 'mobile-tab active' : 'mobile-tab'}
+          >
+            <User size={20} />
+            <span>Profile</span>
+          </Link>
+        </nav>
+      ) : (
+        <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
+          <Link
+            to="/"
+            className={location.pathname === '/' ? 'mobile-tab active' : 'mobile-tab'}
+          >
+            <Home size={20} />
+            <span>Home</span>
+          </Link>
+          <Link
+            to="/menu"
+            className={location.pathname === '/menu' ? 'mobile-tab active' : 'mobile-tab'}
+          >
+            <Utensils size={20} />
+            <span>Menu</span>
+          </Link>
+          <Link
+            to="/cart"
+            className={location.pathname === '/cart' ? 'mobile-tab active' : 'mobile-tab'}
+          >
+            <div className="mobile-tab-icon-wrap">
+              <ShoppingBag size={20} />
+              {count > 0 && <span className="mobile-cart-badge">{count}</span>}
+            </div>
+            <span>Cart</span>
+          </Link>
+          <Link
+            to="/orders"
+            className={location.pathname.startsWith('/orders') ? 'mobile-tab active' : 'mobile-tab'}
+          >
+            <Clock3 size={20} />
+            <span>Orders</span>
+          </Link>
+          <Link
+            to={auth.user ? '/profile' : '/login'}
+            className={
+              location.pathname === '/profile' || location.pathname === '/login'
+                ? 'mobile-tab active'
+                : 'mobile-tab'
+            }
+          >
+            <User size={20} />
+            <span>{auth.user ? 'Profile' : 'Sign in'}</span>
+          </Link>
+        </nav>
+      )}
     </div>
   )
 }

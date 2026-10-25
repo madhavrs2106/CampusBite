@@ -68,35 +68,104 @@ def is_user_deleted(user_id: UUID | str) -> bool:
     return str(user_id) in DELETED_USER_IDS
 
 
+def undelete_user(user_id: UUID | str) -> None:
+    DELETED_USER_IDS.discard(str(user_id))
+
+
 def reset_dev_profiles() -> None:
     DEV_PROFILES.clear()
     DELETED_USER_IDS.clear()
 
 
 
-def get_or_create_dev_profile(user_id: UUID, role: str = "canteen_staff") -> ProfileRecord:
+import re
+
+
+def format_name_from_email(email: str | None) -> str:
+    if not email:
+        return ""
+    local = email.split("@")[0]
+    cleaned = re.sub(r"\d+$", "", local) if len(re.sub(r"\d+$", "", local)) >= 3 else local
+    parts = [p.capitalize() for p in re.split(r"[-_.]+", cleaned) if p and not p.isdigit()]
+    return " ".join(parts) if parts else local.capitalize()
+
+
+def is_generic_placeholder(name: str | None) -> bool:
+    if not name:
+        return True
+    n = name.strip().lower()
+    return n in (
+        "campus student",
+        "campus faculty",
+        "faculty member",
+        "canteen staff",
+        "canteen staff demo",
+        "unnamed user",
+        "student",
+    )
+
+
+def get_or_create_dev_profile(
+    user_id: UUID,
+    role: str = "student",
+    full_name: str | None = None,
+    student_id: str | None = None,
+    email: str | None = None,
+) -> ProfileRecord:
     if is_user_deleted(user_id):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="This account has been deleted.",
         )
+
+    clean_name = (full_name or "").strip()
+    if is_generic_placeholder(clean_name) and email:
+        clean_name = format_name_from_email(email)
+
+    if not clean_name:
+        if role == "canteen_staff":
+            clean_name = "Canteen Staff"
+        elif role == "admin":
+            clean_name = "Admin"
+        elif role == "faculty":
+            clean_name = "Faculty Member"
+        else:
+            clean_name = "Student"
+
     if user_id not in DEV_PROFILES:
         DEV_PROFILES[user_id] = ProfileRecord(
             id=user_id,
-            full_name="Canteen Staff",
-            student_id=None,
+            full_name=clean_name,
+            student_id=student_id,
             role=role,
             account_status="active",
             created_at=datetime.now(),
         )
+    else:
+        existing = DEV_PROFILES[user_id]
+        should_update_name = bool(clean_name and (
+            is_generic_placeholder(existing.full_name) or clean_name != existing.full_name
+        ))
+        if should_update_name or role != existing.role or student_id:
+            DEV_PROFILES[user_id] = ProfileRecord(
+                id=existing.id,
+                full_name=clean_name if should_update_name else existing.full_name,
+                student_id=student_id or existing.student_id,
+                role=role or existing.role,
+                account_status=existing.account_status,
+                created_at=existing.created_at,
+            )
     return DEV_PROFILES[user_id]
 
 
 def set_dev_profile_role(user_id: UUID, role: str) -> ProfileRecord:
     p = get_or_create_dev_profile(user_id, role=role)
+    current_name = p.full_name
+    if is_generic_placeholder(current_name):
+        current_name = "Canteen Staff" if role == "canteen_staff" else ("Faculty Member" if role == "faculty" else "Student")
     DEV_PROFILES[user_id] = ProfileRecord(
         id=p.id,
-        full_name=p.full_name or "Canteen Staff",
+        full_name=current_name,
         student_id=p.student_id,
         role=role,
         account_status=p.account_status,
@@ -105,12 +174,25 @@ def set_dev_profile_role(user_id: UUID, role: str) -> ProfileRecord:
     return DEV_PROFILES[user_id]
 
 
-async def fetch_profile(config: SupabaseConfig, access_token: str, user_id: UUID) -> ProfileRecord:
+async def fetch_profile(
+    config: SupabaseConfig,
+    access_token: str,
+    user_id: UUID,
+    meta: dict[str, Any] | None = None,
+) -> ProfileRecord:
     if is_user_deleted(user_id):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="This account has been deleted.",
         )
+    user_meta = meta or {}
+    meta_email = (user_meta.get("email") or "").strip()
+    meta_name = (user_meta.get("full_name") or user_meta.get("name") or "").strip()
+    if is_generic_placeholder(meta_name) and meta_email:
+        meta_name = format_name_from_email(meta_email)
+    meta_roll = (user_meta.get("student_id") or "").strip() or None
+    meta_role = str(user_meta.get("role") or user_meta.get("user_type") or "student").strip()
+
     try:
         response = await _rest_request(
             config,
@@ -119,20 +201,26 @@ async def fetch_profile(config: SupabaseConfig, access_token: str, user_id: UUID
             params={"id": f"eq.{user_id}", "select": PROFILE_FIELDS, "limit": "1"},
         )
     except HTTPException:
-        return get_or_create_dev_profile(user_id)
+        return get_or_create_dev_profile(
+            user_id, role=meta_role, full_name=meta_name, student_id=meta_roll, email=meta_email
+        )
 
     if response.status_code == 404:
-        return get_or_create_dev_profile(user_id)
+        return get_or_create_dev_profile(
+            user_id, role=meta_role, full_name=meta_name, student_id=meta_roll, email=meta_email
+        )
     if response.status_code >= 400:
         _raise_profile_error(response)
     try:
         rows = response.json()
+        fallback_role_name = "Faculty Member" if meta_role == "faculty" else ("Canteen Staff" if meta_role == "canteen_staff" else "Student")
+        resolved_initial_name = meta_name or format_name_from_email(meta_email) or fallback_role_name
         if not rows:
             new_profile = {
                 "id": str(user_id),
-                "full_name": "",
-                "student_id": None,
-                "role": "student",
+                "full_name": resolved_initial_name,
+                "student_id": meta_roll,
+                "role": meta_role or "student",
                 "account_status": "active",
             }
             insert_resp = await _rest_request(config, access_token, "POST", payload=new_profile)
@@ -142,13 +230,26 @@ async def fetch_profile(config: SupabaseConfig, access_token: str, user_id: UUID
                     return ProfileRecord.model_validate(inserted[0])
             return ProfileRecord(
                 id=user_id,
-                full_name="",
-                student_id=None,
-                role="student",
+                full_name=resolved_initial_name,
+                student_id=meta_roll,
+                role=meta_role or "student",
                 account_status="active",
                 created_at=datetime.now(),
             )
-        return ProfileRecord.model_validate(rows[0])
+        record = ProfileRecord.model_validate(rows[0])
+        # If record in DB has a generic name ("Campus Student", "Campus Faculty", etc.) and we have a better name
+        if is_generic_placeholder(record.full_name) and (meta_name or meta_email):
+            better_name = meta_name or format_name_from_email(meta_email)
+            if better_name:
+                return ProfileRecord(
+                    id=record.id,
+                    full_name=better_name,
+                    student_id=record.student_id or meta_roll,
+                    role=record.role,
+                    account_status=record.account_status,
+                    created_at=record.created_at,
+                )
+        return record
     except (ValueError, TypeError, ValidationError) as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
